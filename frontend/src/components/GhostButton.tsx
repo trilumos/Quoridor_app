@@ -1,6 +1,7 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { COLORS } from '../theme/colors';
+import React, { useMemo } from "react";
+import { TouchableOpacity, Text, StyleSheet } from "react-native";
+import { getThemeColors } from "../theme/colors";
+import { useGameContext } from "../storage/GameContext";
 
 interface Props {
   title: string;
@@ -10,7 +11,17 @@ interface Props {
   color?: string;
 }
 
-export default function GhostButton({ title, onPress, disabled, testID, color }: Props) {
+export default function GhostButton({
+  title,
+  onPress,
+  disabled,
+  testID,
+  color,
+}: Props) {
+  const { settings } = useGameContext();
+  const theme = getThemeColors(settings.darkMode);
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   return (
     <TouchableOpacity
       testID={testID}
@@ -24,17 +35,18 @@ export default function GhostButton({ title, onPress, disabled, testID, color }:
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  disabled: { opacity: 0.35 },
-  text: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-});
+const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
+  StyleSheet.create({
+    button: {
+      paddingVertical: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    disabled: { opacity: 0.35 },
+    text: {
+      color: theme.textSecondary,
+      fontSize: 14,
+      fontWeight: "600",
+      letterSpacing: 0.3,
+    },
+  });

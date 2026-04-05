@@ -12,10 +12,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
-import { getThemeColors } from "../src/theme/colors";
-import { useGameContext } from "../src/storage/GameContext";
-import { useAuthStore } from "../src/store/authStore";
-import { FeedbackService } from "../src/services/FeedbackService";
+import { getThemeColors } from "../../src/theme/colors";
+import { useGameContext } from "../../src/storage/GameContext";
+import { useAuthStore } from "../../src/store/authStore";
+import { FeedbackService } from "../../src/services/FeedbackService";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -47,14 +47,6 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={st.scroll}
       >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={st.backBtn}
-          activeOpacity={0.6}
-        >
-          <Ionicons name="arrow-back" size={22} color={theme.textSecondary} />
-        </TouchableOpacity>
-
         <Text style={st.pageTitle}>SETTINGS</Text>
         <Text style={st.pageSubtitle}>CONFIGURATION INTERFACE</Text>
 
@@ -230,7 +222,6 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     scroll: { paddingHorizontal: 20, paddingBottom: 32 },
-    backBtn: { width: 44, height: 44, justifyContent: "center", marginTop: 8 },
     pageTitle: {
       color: theme.spaceTextPrimary,
       fontSize: 34,

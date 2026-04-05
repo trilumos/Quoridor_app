@@ -1,10 +1,9 @@
-import { create } from 'zustand';
-import { AuthService } from '../services/AuthService';
-import { ProfileService, Profile } from '../services/ProfileService';
-import { Session, User } from '@supabase/supabase-js';
+import { create } from "zustand";
+import { ProfileService, Profile } from "../services/ProfileService";
+import { AuthService, Session, LocalUser } from "../services/AuthService";
 
 interface AuthState {
-  user: User | null;
+  user: LocalUser | null;
   session: Session | null;
   profile: Profile | null;
   isAuthenticated: boolean;
@@ -16,7 +15,7 @@ interface AuthState {
   fetchProfile: () => Promise<void>;
   updateUsername: (username: string) => Promise<boolean>;
   updateAvatar: (avatarUrl: string) => Promise<boolean>;
-  activatePremium: (tier: 'monthly' | 'annual') => Promise<boolean>;
+  activatePremium: (tier: "monthly" | "annual") => Promise<boolean>;
   signOut: () => Promise<void>;
   reset: () => void;
 }
@@ -27,7 +26,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   isAuthenticated: false,
   isLoading: true,
-  isPremium: false,
+  isPremium: true,
 
   initialize: async () => {
     set({ isLoading: true });
@@ -36,6 +35,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         user: session.user,
         session,
+        isAuthenticated: true,
+      });
+      await get().fetchProfile();
+    } else {
+      const demoSession = AuthService.createDemoSession();
+      await AuthService.setSession(demoSession);
+      set({
+        user: demoSession.user,
+        session: demoSession,
         isAuthenticated: true,
       });
       await get().fetchProfile();
@@ -73,8 +81,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { user } = get();
     if (!user) return;
     const profile = await ProfileService.getProfile(user.id);
-    const premium = profile ? await ProfileService.isPremium(user.id) : false;
-    set({ profile, isPremium: premium });
+    set({ profile, isPremium: true });
   },
 
   updateUsername: async (username: string) => {
@@ -103,7 +110,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return ok;
   },
 
-  activatePremium: async (tier: 'monthly' | 'annual') => {
+  activatePremium: async (tier: "monthly" | "annual") => {
     const { user } = get();
     if (!user) return false;
     const ok = await ProfileService.activatePremium(user.id, tier);
@@ -130,7 +137,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       profile: null,
       isAuthenticated: false,
       isLoading: false,
-      isPremium: false,
+      isPremium: true,
     });
   },
 }));

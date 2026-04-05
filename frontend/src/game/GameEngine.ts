@@ -1,4 +1,4 @@
-import { Position, Wall, GameState, PlayerState } from './types';
+import { Position, Wall, GameState, PlayerState } from "./types";
 
 function edgeKey(r1: number, c1: number, r2: number, c2: number): string {
   if (r1 < r2 || (r1 === r2 && c1 < c2)) return `${r1},${c1}-${r2},${c2}`;
@@ -8,7 +8,7 @@ function edgeKey(r1: number, c1: number, r2: number, c2: number): string {
 export function buildBlockedEdges(walls: Wall[]): Set<string> {
   const blocked = new Set<string>();
   for (const wall of walls) {
-    if (wall.orientation === 'horizontal') {
+    if (wall.orientation === "horizontal") {
       blocked.add(edgeKey(wall.row, wall.col, wall.row + 1, wall.col));
       blocked.add(edgeKey(wall.row, wall.col + 1, wall.row + 1, wall.col + 1));
     } else {
@@ -19,13 +19,29 @@ export function buildBlockedEdges(walls: Wall[]): Set<string> {
   return blocked;
 }
 
-export function isEdgeBlocked(r1: number, c1: number, r2: number, c2: number, blocked: Set<string>): boolean {
+export function isEdgeBlocked(
+  r1: number,
+  c1: number,
+  r2: number,
+  c2: number,
+  blocked: Set<string>,
+): boolean {
   return blocked.has(edgeKey(r1, c1, r2, c2));
 }
 
-const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+const DIRS = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+];
 
-export function hasPath(startRow: number, startCol: number, goalRow: number, walls: Wall[]): boolean {
+export function hasPath(
+  startRow: number,
+  startCol: number,
+  goalRow: number,
+  walls: Wall[],
+): boolean {
   if (startRow === goalRow) return true;
   const blocked = buildBlockedEdges(walls);
   const visited = new Set<string>();
@@ -48,7 +64,12 @@ export function hasPath(startRow: number, startCol: number, goalRow: number, wal
   return false;
 }
 
-export function bfsShortestPathLength(startRow: number, startCol: number, goalRow: number, walls: Wall[]): number {
+export function bfsShortestPathLength(
+  startRow: number,
+  startCol: number,
+  goalRow: number,
+  walls: Wall[],
+): number {
   if (startRow === goalRow) return 0;
   const blocked = buildBlockedEdges(walls);
   const visited = new Set<string>();
@@ -71,7 +92,12 @@ export function bfsShortestPathLength(startRow: number, startCol: number, goalRo
   return 999;
 }
 
-export function bfsShortestPath(startRow: number, startCol: number, goalRow: number, walls: Wall[]): Position[] | null {
+export function bfsShortestPath(
+  startRow: number,
+  startCol: number,
+  goalRow: number,
+  walls: Wall[],
+): Position[] | null {
   if (startRow === goalRow) return [{ row: startRow, col: startCol }];
   const blocked = buildBlockedEdges(walls);
   const visited = new Set<string>();
@@ -91,7 +117,10 @@ export function bfsShortestPath(startRow: number, startCol: number, goalRow: num
       if (isEdgeBlocked(r, c, nr, nc, blocked)) continue;
       visited.add(nkey);
       parent.set(nkey, key);
-      if (nr === goalRow) { goalKey = nkey; break; }
+      if (nr === goalRow) {
+        goalKey = nkey;
+        break;
+      }
       queue.push([nr, nc]);
     }
     if (goalKey) break;
@@ -100,14 +129,18 @@ export function bfsShortestPath(startRow: number, startCol: number, goalRow: num
   const path: Position[] = [];
   let current: string | undefined = goalKey;
   while (current) {
-    const [r, c] = current.split(',').map(Number);
+    const [r, c] = current.split(",").map(Number);
     path.unshift({ row: r, col: c });
     current = parent.get(current);
   }
   return path;
 }
 
-export function getValidMoves(playerPos: Position, opponentPos: Position, walls: Wall[]): Position[] {
+export function getValidMoves(
+  playerPos: Position,
+  opponentPos: Position,
+  walls: Wall[],
+): Position[] {
   const blocked = buildBlockedEdges(walls);
   const moves: Position[] = [];
   for (const [dr, dc] of DIRS) {
@@ -118,14 +151,35 @@ export function getValidMoves(playerPos: Position, opponentPos: Position, walls:
     if (nr === opponentPos.row && nc === opponentPos.col) {
       const jr = nr + dr;
       const jc = nc + dc;
-      if (jr >= 0 && jr <= 8 && jc >= 0 && jc <= 8 && !isEdgeBlocked(nr, nc, jr, jc, blocked)) {
+      if (
+        jr >= 0 &&
+        jr <= 8 &&
+        jc >= 0 &&
+        jc <= 8 &&
+        !isEdgeBlocked(nr, nc, jr, jc, blocked)
+      ) {
         moves.push({ row: jr, col: jc });
       } else {
-        const perpDirs = dc === 0 ? [[0, -1], [0, 1]] : [[-1, 0], [1, 0]];
+        const perpDirs =
+          dc === 0
+            ? [
+                [0, -1],
+                [0, 1],
+              ]
+            : [
+                [-1, 0],
+                [1, 0],
+              ];
         for (const [pdr, pdc] of perpDirs) {
           const diagR = nr + pdr;
           const diagC = nc + pdc;
-          if (diagR >= 0 && diagR <= 8 && diagC >= 0 && diagC <= 8 && !isEdgeBlocked(nr, nc, diagR, diagC, blocked)) {
+          if (
+            diagR >= 0 &&
+            diagR <= 8 &&
+            diagC >= 0 &&
+            diagC <= 8 &&
+            !isEdgeBlocked(nr, nc, diagR, diagC, blocked)
+          ) {
             moves.push({ row: diagR, col: diagC });
           }
         }
@@ -137,16 +191,23 @@ export function getValidMoves(playerPos: Position, opponentPos: Position, walls:
   return moves;
 }
 
-export function isValidWallPlacement(wall: Wall, existingWalls: Wall[], p1Pos: Position, p2Pos: Position): boolean {
+export function isValidWallPlacement(
+  wall: Wall,
+  existingWalls: Wall[],
+  p1Pos: Position,
+  p2Pos: Position,
+): boolean {
   const { row, col, orientation } = wall;
   if (row < 0 || row > 7 || col < 0 || col > 7) return false;
   for (const existing of existingWalls) {
     if (existing.row === row && existing.col === col) return false;
-    if (orientation === 'horizontal' && existing.orientation === 'horizontal') {
-      if (existing.row === row && Math.abs(existing.col - col) === 1) return false;
+    if (orientation === "horizontal" && existing.orientation === "horizontal") {
+      if (existing.row === row && Math.abs(existing.col - col) === 1)
+        return false;
     }
-    if (orientation === 'vertical' && existing.orientation === 'vertical') {
-      if (existing.col === col && Math.abs(existing.row - row) === 1) return false;
+    if (orientation === "vertical" && existing.orientation === "vertical") {
+      if (existing.col === col && Math.abs(existing.row - row) === 1)
+        return false;
     }
   }
   const testWalls = [...existingWalls, wall];
@@ -156,12 +217,27 @@ export function isValidWallPlacement(wall: Wall, existingWalls: Wall[], p1Pos: P
 }
 
 export function createInitialGameState(
-  p1Name: string, p1Color: string, p2Name: string, p2Color: string
+  p1Name: string,
+  p1Color: string,
+  p2Name: string,
+  p2Color: string,
 ): GameState {
   return {
     players: [
-      { position: { row: 8, col: 4 }, wallsRemaining: 10, name: p1Name, color: p1Color, goalRow: 0 },
-      { position: { row: 0, col: 4 }, wallsRemaining: 10, name: p2Name, color: p2Color, goalRow: 8 },
+      {
+        position: { row: 8, col: 4 },
+        wallsRemaining: 10,
+        name: p1Name,
+        color: p1Color,
+        goalRow: 0,
+      },
+      {
+        position: { row: 0, col: 4 },
+        wallsRemaining: 10,
+        name: p2Name,
+        color: p2Color,
+        goalRow: 8,
+      },
     ],
     currentPlayer: 0,
     walls: [],
@@ -203,9 +279,20 @@ export function applyMove(state: GameState, to: Position): GameState {
 
 export function applyWall(state: GameState, wall: Wall): GameState {
   const cp = state.currentPlayer;
+  const ownedWall: Wall = { ...wall, owner: cp };
   const newPlayers: [PlayerState, PlayerState] = [
-    cp === 0 ? { ...state.players[0], wallsRemaining: state.players[0].wallsRemaining - 1 } : { ...state.players[0] },
-    cp === 1 ? { ...state.players[1], wallsRemaining: state.players[1].wallsRemaining - 1 } : { ...state.players[1] },
+    cp === 0
+      ? {
+          ...state.players[0],
+          wallsRemaining: state.players[0].wallsRemaining - 1,
+        }
+      : { ...state.players[0] },
+    cp === 1
+      ? {
+          ...state.players[1],
+          wallsRemaining: state.players[1].wallsRemaining - 1,
+        }
+      : { ...state.players[1] },
   ];
   const newWallsPlaced: [number, number] = [...state.wallsPlaced];
   newWallsPlaced[cp]++;
@@ -213,7 +300,7 @@ export function applyWall(state: GameState, wall: Wall): GameState {
     ...state,
     players: newPlayers,
     currentPlayer: (1 - cp) as 0 | 1,
-    walls: [...state.walls, wall],
+    walls: [...state.walls, ownedWall],
     wallsPlaced: newWallsPlaced,
   };
 }

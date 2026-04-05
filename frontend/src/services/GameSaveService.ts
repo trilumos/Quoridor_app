@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { StorageService } from "../storage/StorageService";
 
 export interface SavedGame {
   user_id: string;
@@ -8,27 +8,27 @@ export interface SavedGame {
   saved_at: string;
 }
 
+function saveKey(userId: string) {
+  return `${StorageService.KEYS.SAVED_GAME}:${userId}`;
+}
+
 export const GameSaveService = {
   async saveGame(
     userId: string,
     gameState: Record<string, any>,
     mode: string,
-    difficulty: string | null
+    difficulty: string | null,
   ): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('saved_games')
-        .upsert(
-          {
-            user_id: userId,
-            game_state: gameState,
-            mode,
-            difficulty,
-            saved_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id' }
-        );
-      return !error;
+      const savedGame: SavedGame = {
+        user_id: userId,
+        game_state: gameState,
+        mode,
+        difficulty,
+        saved_at: new Date().toISOString(),
+      };
+      await StorageService.set(saveKey(userId), savedGame);
+      return true;
     } catch {
       return false;
     }
@@ -36,13 +36,7 @@ export const GameSaveService = {
 
   async loadSavedGame(userId: string): Promise<SavedGame | null> {
     try {
-      const { data, error } = await supabase
-        .from('saved_games')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      if (error || !data) return null;
-      return data as SavedGame;
+      return (await StorageService.get<SavedGame>(saveKey(userId))) || null;
     } catch {
       return null;
     }
@@ -50,11 +44,8 @@ export const GameSaveService = {
 
   async deleteSavedGame(userId: string): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('saved_games')
-        .delete()
-        .eq('user_id', userId);
-      return !error;
+      await StorageService.clear(saveKey(userId));
+      return true;
     } catch {
       return false;
     }

@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { StatsService, GameStats, GameData } from '../services/StatsService';
-import { AchievementService } from '../services/AchievementService';
+import { create } from "zustand";
+import { StatsService, GameStats, GameData } from "../services/StatsService";
+import { AchievementService } from "../services/AchievementService";
 
 interface StatsState {
   stats: GameStats | null;
@@ -9,10 +9,7 @@ interface StatsState {
 
   fetchStats: (userId: string) => Promise<void>;
   fetchAchievements: (userId: string) => Promise<void>;
-  recordGame: (
-    userId: string,
-    gameData: GameData
-  ) => Promise<string[]>;
+  recordGame: (userId: string, gameData: GameData) => Promise<string[]>;
   reset: () => void;
 }
 
@@ -32,17 +29,14 @@ export const useStatsStore = create<StatsState>((set, get) => ({
     set({ achievements });
   },
 
-  recordGame: async (
-    userId: string,
-    gameData: GameData
-  ): Promise<string[]> => {
-    // 1. Record the game result in Supabase
+  recordGame: async (userId: string, gameData: GameData): Promise<string[]> => {
+    // 1. Record the game result locally
     await StatsService.recordGameResult(userId, gameData);
 
     // 2. Optimistically update local stats
     const { stats } = get();
     if (stats) {
-      const isWin = gameData.result === 'WIN';
+      const isWin = gameData.result === "WIN";
       const newCurrentStreak = isWin ? stats.current_streak + 1 : 0;
       set({
         stats: {
@@ -53,8 +47,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
           current_streak: newCurrentStreak,
           best_streak: Math.max(stats.best_streak, newCurrentStreak),
           rating: gameData.rating_after,
-          total_walls_placed:
-            stats.total_walls_placed + gameData.walls_placed,
+          total_walls_placed: stats.total_walls_placed + gameData.walls_placed,
           updated_at: new Date().toISOString(),
         },
       });
@@ -67,7 +60,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
     const newlyUnlocked = await AchievementService.checkAndUnlock(
       userId,
       gameData,
-      updatedStats
+      updatedStats,
     );
 
     // 4. Update local achievements list

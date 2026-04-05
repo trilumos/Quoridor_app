@@ -6,7 +6,8 @@ export interface Position {
 export interface Wall {
   row: number;
   col: number;
-  orientation: 'horizontal' | 'vertical';
+  orientation: "horizontal" | "vertical";
+  owner?: 0 | 1;
 }
 
 export interface PlayerState {
@@ -28,19 +29,19 @@ export interface GameState {
   startTime: number;
 }
 
-export type GameMode = 'ai' | 'local';
-export type AIDifficulty = 'easy' | 'medium' | 'hard';
-export type ActionMode = 'move' | 'wall';
+export type GameMode = "ai" | "local";
+export type AIDifficulty = "easy" | "medium" | "hard";
+export type ActionMode = "move" | "wall";
 
 export interface MoveAction {
-  type: 'move';
+  type: "move";
   player: number;
   from: Position;
   to: Position;
 }
 
 export interface WallAction {
-  type: 'wall';
+  type: "wall";
   player: number;
   wall: Wall;
 }

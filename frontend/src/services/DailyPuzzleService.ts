@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { StorageService } from "../storage/StorageService";
 
 export interface DailyPuzzleProgress {
   user_id: string;
@@ -7,6 +7,10 @@ export interface DailyPuzzleProgress {
   total_completed: number;
   puzzles_completed: string[];
   last_completed_date: string | null;
+}
+
+function progressKey(userId: string) {
+  return `${StorageService.KEYS.DAILY_PUZZLE}:${userId}`;
 }
 
 function isSameDay(d1: Date, d2: Date): boolean {
@@ -26,39 +30,30 @@ function isYesterday(d1: Date, d2: Date): boolean {
 export const DailyPuzzleService = {
   async getProgress(userId: string): Promise<DailyPuzzleProgress | null> {
     try {
-      const { data, error } = await supabase
-        .from('daily_puzzle_progress')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      if (error || !data) return null;
-      return data as DailyPuzzleProgress;
+      return (
+        (await StorageService.get<DailyPuzzleProgress>(progressKey(userId))) ||
+        null
+      );
     } catch {
       return null;
     }
   },
 
-  async completePuzzle(
-    userId: string,
-    puzzleId: string
-  ): Promise<boolean> {
+  async completePuzzle(userId: string, puzzleId: string): Promise<boolean> {
     try {
       const today = new Date();
       const progress = await this.getProgress(userId);
 
       if (!progress) {
-        // First ever puzzle
-        const { error } = await supabase
-          .from('daily_puzzle_progress')
-          .insert({
-            user_id: userId,
-            current_streak: 1,
-            best_streak: 1,
-            total_completed: 1,
-            puzzles_completed: [puzzleId],
-            last_completed_date: today.toISOString().split('T')[0],
-          });
-        return !error;
+        await StorageService.set(progressKey(userId), {
+          user_id: userId,
+          current_streak: 1,
+          best_streak: 1,
+          total_completed: 1,
+          puzzles_completed: [puzzleId],
+          last_completed_date: today.toISOString().split("T")[0],
+        });
+        return true;
       }
 
       const lastDate = progress.last_completed_date
@@ -78,23 +73,18 @@ export const DailyPuzzleService = {
       }
 
       const newBestStreak = Math.max(progress.best_streak, newStreak);
-      const newCompleted = [
-        ...(progress.puzzles_completed || []),
-        puzzleId,
-      ];
+      const newCompleted = [...(progress.puzzles_completed || []), puzzleId];
 
-      const { error } = await supabase
-        .from('daily_puzzle_progress')
-        .update({
-          current_streak: newStreak,
-          best_streak: newBestStreak,
-          total_completed: progress.total_completed + 1,
-          puzzles_completed: newCompleted,
-          last_completed_date: today.toISOString().split('T')[0],
-        })
-        .eq('user_id', userId);
+      await StorageService.set(progressKey(userId), {
+        ...progress,
+        current_streak: newStreak,
+        best_streak: newBestStreak,
+        total_completed: progress.total_completed + 1,
+        puzzles_completed: newCompleted,
+        last_completed_date: today.toISOString().split("T")[0],
+      });
 
-      return !error;
+      return true;
     } catch {
       return false;
     }

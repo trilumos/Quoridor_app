@@ -1,14 +1,15 @@
-import React, { useMemo } from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useMemo } from "react";
+import { View, TouchableOpacity, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
   withRepeat,
   withSequence,
   withTiming,
   Easing,
-} from 'react-native-reanimated';
-import { Position, Wall, GameState, ActionMode } from '../game/types';
-import { COLORS } from '../theme/colors';
+} from "react-native-reanimated";
+import { Position, Wall, GameState, ActionMode } from "../game/types";
+import { getThemeColors } from "../theme/colors";
+import { useGameContext } from "../storage/GameContext";
 
 interface GameBoardProps {
   gameState: GameState;
@@ -20,7 +21,17 @@ interface GameBoardProps {
   boardSize: number;
 }
 
-const WALL_THICKNESS = 3;
+const WALL_THICKNESS = 5;
+const GRID_LINE_THICKNESS = 1.4;
+
+const withAlpha = (hex: string, alpha: number) => {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 function PawnGlow({
   x,
@@ -54,7 +65,7 @@ function PawnGlow({
     <Animated.View
       style={[
         {
-          position: 'absolute',
+          position: "absolute",
           left: x,
           top: y,
           width: size,
@@ -78,23 +89,32 @@ export default React.memo(function GameBoard({
   onIntersectionPress,
   boardSize,
 }: GameBoardProps) {
+  const { settings } = useGameContext();
+  const theme = getThemeColors(settings.darkMode);
+  const gridLineColor = settings.darkMode
+    ? "rgba(255, 138, 51, 0.24)"
+    : "rgba(233, 106, 0, 0.28)";
+
   const { cellSize, gapSize, step } = useMemo(() => {
     const gs = Math.max(4, Math.round(boardSize / 55));
     const cs = (boardSize - 8 * gs) / 9;
     return { cellSize: cs, gapSize: gs, step: cs + gs };
   }, [boardSize]);
 
-  if (boardSize <= 0 || cellSize <= 0) return null;
-
   const isValidMove = (r: number, c: number) =>
     validMoves.some((m) => m.row === r && m.col === c);
 
   const pawnSize = cellSize * 0.55;
   const glowSize = cellSize * 0.75;
-  const dotSize = Math.max(cellSize * 0.18, 4);
+  const hintDotSize = Math.max(cellSize * 0.24, 6);
+  const activePlayerColor = gameState.players[gameState.currentPlayer].color;
+  const validMoveDotTint = withAlpha(
+    activePlayerColor,
+    settings.darkMode ? 0.42 : 0.36,
+  );
 
   const getWallStyle = (wall: Wall) => {
-    if (wall.orientation === 'horizontal') {
+    if (wall.orientation === "horizontal") {
       return {
         left: wall.col * step,
         top: wall.row * step + cellSize + (gapSize - WALL_THICKNESS) / 2,
@@ -118,12 +138,12 @@ export default React.memo(function GameBoard({
         <View
           key={`hl-${r}`}
           style={{
-            position: 'absolute',
+            position: "absolute",
             left: 0,
-            top: r * step + cellSize + gapSize / 2 - 0.75,
+            top: r * step + cellSize + gapSize / 2 - GRID_LINE_THICKNESS / 2,
             width: boardSize,
-            height: 1.5,
-            backgroundColor: COLORS.gridLine,
+            height: GRID_LINE_THICKNESS,
+            backgroundColor: gridLineColor,
           }}
         />,
       );
@@ -133,18 +153,18 @@ export default React.memo(function GameBoard({
         <View
           key={`vl-${c}`}
           style={{
-            position: 'absolute',
-            left: c * step + cellSize + gapSize / 2 - 0.75,
+            position: "absolute",
+            left: c * step + cellSize + gapSize / 2 - GRID_LINE_THICKNESS / 2,
             top: 0,
-            width: 1.5,
+            width: GRID_LINE_THICKNESS,
             height: boardSize,
-            backgroundColor: COLORS.gridLine,
+            backgroundColor: gridLineColor,
           }}
         />,
       );
     }
     return lines;
-  }, [boardSize, cellSize, gapSize, step]);
+  }, [boardSize, cellSize, gapSize, step, gridLineColor]);
 
   // Cell coordinate list
   const cells = useMemo(() => {
@@ -163,8 +183,8 @@ export default React.memo(function GameBoard({
     const py = player.position.row * step + (cellSize - pawnSize) / 2;
     const gx = player.position.col * step + (cellSize - glowSize) / 2;
     const gy = player.position.row * step + (cellSize - glowSize) / 2;
-    const pawnColor = i === 0 ? COLORS.player1 : COLORS.player2;
-    const glowColor = i === 0 ? COLORS.player1Glow : COLORS.player2Glow;
+    const pawnColor = i === 0 ? theme.player1 : theme.player2;
+    const glowColor = i === 0 ? theme.player1Glow : theme.player2Glow;
 
     return (
       <React.Fragment key={`pawn-${i}`}>
@@ -172,7 +192,7 @@ export default React.memo(function GameBoard({
         <View
           testID={`pawn-${i}`}
           style={{
-            position: 'absolute',
+            position: "absolute",
             left: px,
             top: py,
             width: pawnSize,
@@ -188,7 +208,7 @@ export default React.memo(function GameBoard({
 
   // Intersection touch zones (wall mode)
   const intersections =
-    actionMode === 'wall'
+    actionMode === "wall"
       ? (() => {
           const zones: React.ReactNode[] = [];
           const touchSize = Math.max(gapSize * 3.5, 28);
@@ -202,7 +222,7 @@ export default React.memo(function GameBoard({
                   testID={`intersection-${r}-${c}`}
                   onPress={() => onIntersectionPress(r, c)}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     left: cx - touchSize / 2,
                     top: cy - touchSize / 2,
                     width: touchSize,
@@ -217,15 +237,20 @@ export default React.memo(function GameBoard({
         })()
       : null;
 
+  if (boardSize <= 0 || cellSize <= 0) return null;
+
   return (
     <View
       testID="game-board"
-      style={[styles.board, { width: boardSize, height: boardSize }]}
+      style={[
+        styles.board,
+        { width: boardSize, height: boardSize, backgroundColor: theme.boardBg },
+      ]}
     >
       {gridLines}
 
       {cells.map(({ r, c }) => {
-        const valid = actionMode === 'move' && isValidMove(r, c);
+        const valid = actionMode === "move" && isValidMove(r, c);
         return (
           <TouchableOpacity
             key={`c-${r}-${c}`}
@@ -233,24 +258,24 @@ export default React.memo(function GameBoard({
             activeOpacity={valid ? 0.6 : 1}
             onPress={() => onCellPress(r, c)}
             style={{
-              position: 'absolute',
+              position: "absolute",
               left: c * step,
               top: r * step,
               width: cellSize,
               height: cellSize,
-              borderRadius: 2,
-              backgroundColor: 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
+              borderRadius: 0,
+              backgroundColor: "transparent",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             {valid && (
               <View
                 style={{
-                  width: dotSize,
-                  height: dotSize,
-                  borderRadius: dotSize / 2,
-                  backgroundColor: COLORS.validMove,
+                  width: hintDotSize,
+                  height: hintDotSize,
+                  borderRadius: hintDotSize / 2,
+                  backgroundColor: validMoveDotTint,
                 }}
               />
             )}
@@ -260,14 +285,18 @@ export default React.memo(function GameBoard({
 
       {gameState.walls.map((wall, i) => {
         const ws = getWallStyle(wall);
+        const wallColor =
+          wall.owner !== undefined
+            ? gameState.players[wall.owner].color
+            : theme.accent;
         return (
           <View
             key={`wall-${i}`}
             testID={`wall-${i}`}
             style={{
-              position: 'absolute',
+              position: "absolute",
               ...ws,
-              backgroundColor: COLORS.wallPlaced,
+              backgroundColor: wallColor,
               borderRadius: 1.5,
               zIndex: 5,
             }}
@@ -282,9 +311,10 @@ export default React.memo(function GameBoard({
             <View
               testID="wall-preview"
               style={{
-                position: 'absolute',
+                position: "absolute",
                 ...ws,
-                backgroundColor: COLORS.wallPreview,
+                backgroundColor: activePlayerColor,
+                opacity: 0.42,
                 borderRadius: 1.5,
                 zIndex: 6,
               }}
@@ -300,9 +330,8 @@ export default React.memo(function GameBoard({
 
 const styles = StyleSheet.create({
   board: {
-    backgroundColor: COLORS.boardBg,
-    borderRadius: 8,
-    position: 'relative',
-    overflow: 'hidden',
+    borderRadius: 0,
+    position: "relative",
+    overflow: "hidden",
   },
 });

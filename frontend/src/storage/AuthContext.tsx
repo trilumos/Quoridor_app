@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
-import { Session, User } from '@supabase/supabase-js';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
-
-WebBrowser.maybeCompleteAuthSession();
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import { AuthService, Session } from "../services/AuthService";
 
 export interface UserProfile {
   displayName: string;
@@ -20,28 +20,43 @@ interface AuthContextType {
   isLoading: boolean;
   user: UserProfile | null;
   session: Session | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  signup: (
+    name: string,
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   updateProfile: (updates: Partial<UserProfile>) => void;
-  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
-  resetPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  requestPasswordReset: (
+    email: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (
+    newPassword: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
-  googleAuthRequest: ReturnType<typeof Google.useIdTokenAuthRequest>[0];
+  googleAuthRequest: any;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
-
-function userToProfile(user: User): UserProfile {
-  const meta = user.user_metadata || {};
+function sessionToProfile(session: Session): UserProfile {
+  const meta = session.user.user_metadata || {};
   return {
-    displayName: (meta.display_name || meta.full_name || meta.name || user.email?.split('@')[0] || 'PLAYER').toUpperCase(),
-    email: user.email || '',
-    avatar: meta.avatar_url || meta.picture || '',
-    joinDate: user.created_at || new Date().toISOString(),
-    rank: 'STRATEGIST II',
+    displayName: (
+      meta.display_name ||
+      meta.full_name ||
+      meta.name ||
+      session.user.email?.split("@")[0] ||
+      "PLAYER"
+    ).toUpperCase(),
+    email: session.user.email || "",
+    avatar: meta.avatar_url || meta.picture || "",
+    joinDate: session.user.created_at || new Date().toISOString(),
+    rank: "STRATEGIST II",
   };
 }
 
@@ -51,33 +66,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
 
-  // Google Auth
-  const redirectUri = makeRedirectUri({ preferLocalhost: true });
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: GOOGLE_WEB_CLIENT_ID,
-    redirectUri,
-  });
-
-  // Listen for auth state changes
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setSession(session);
-        setUser(userToProfile(session.user));
-        setIsAuthenticated(true);
-      } else {
-        setSession(null);
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-      setIsLoading(false);
-    });
+    const subscription = AuthService.onAuthStateChange(
+      (_event, authSession) => {
+        if (authSession?.user) {
+          setSession(authSession);
+          setUser(sessionToProfile(authSession));
+          setIsAuthenticated(true);
+        } else {
+          setSession(null);
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+        setIsLoading(false);
+      },
+    );
 
-    // Check existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setSession(session);
-        setUser(userToProfile(session.user));
+    AuthService.getSession().then((authSession) => {
+      if (authSession?.user) {
+        setSession(authSession);
+        setUser(sessionToProfile(authSession));
         setIsAuthenticated(true);
       }
       setIsLoading(false);
@@ -86,61 +94,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Handle Google OAuth response
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      if (id_token) {
-        supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: id_token,
-        }).then(({ error }) => {
-          if (error) console.error('Google sign-in error:', error.message);
-        });
-      }
-    }
-  }, [response]);
-
   const login = useCallback(async (email: string, password: string) => {
-    if (!email.trim()) return { success: false, error: 'Email is required' };
-    if (!password.trim()) return { success: false, error: 'Password is required' };
-    if (!/\S+@\S+\.\S+/.test(email)) return { success: false, error: 'Invalid email format' };
-    if (password.length < 6) return { success: false, error: 'Password must be at least 6 characters' };
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-
-    if (error) return { success: false, error: error.message };
+    const result = await AuthService.signInWithPassword(email, password);
+    if (result.error) return { success: false, error: result.error };
+    if (result.session?.user) {
+      setSession(result.session);
+      setUser(sessionToProfile(result.session));
+      setIsAuthenticated(true);
+    }
     return { success: true };
   }, []);
 
-  const signup = useCallback(async (name: string, email: string, password: string) => {
-    if (!name.trim()) return { success: false, error: 'Name is required' };
-    if (!email.trim()) return { success: false, error: 'Email is required' };
-    if (!password.trim()) return { success: false, error: 'Password is required' };
-    if (!/\S+@\S+\.\S+/.test(email)) return { success: false, error: 'Invalid email format' };
-    if (password.length < 6) return { success: false, error: 'Password must be at least 6 characters' };
-    if (name.length < 2) return { success: false, error: 'Name must be at least 2 characters' };
-
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: {
-          display_name: name.trim(),
-          full_name: name.trim(),
-        },
-      },
-    });
-
-    if (error) return { success: false, error: error.message };
-    return { success: true };
-  }, []);
+  const signup = useCallback(
+    async (name: string, email: string, password: string) => {
+      const result = await AuthService.signUp(name, email, password);
+      if (result.error) return { success: false, error: result.error };
+      if (result.session?.user) {
+        setSession(result.session);
+        setUser(sessionToProfile(result.session));
+        setIsAuthenticated(true);
+      }
+      return { success: true };
+    },
+    [],
+  );
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+    await AuthService.signOut();
     setIsAuthenticated(false);
     setUser(null);
     setSession(null);
@@ -152,54 +132,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (updates.email) metadata.email = updates.email;
 
     if (Object.keys(metadata).length > 0) {
-      await supabase.auth.updateUser({ data: metadata });
+      await AuthService.updateUser({ data: metadata });
     }
 
-    setUser(prev => {
+    setUser((prev) => {
       if (!prev) return prev;
       return { ...prev, ...updates };
     });
   }, []);
 
   const requestPasswordReset = useCallback(async (email: string) => {
-    if (!email.trim()) return { success: false, error: 'Email is required' };
-    if (!/\S+@\S+\.\S+/.test(email)) return { success: false, error: 'Invalid email format' };
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-    if (error) return { success: false, error: error.message };
+    const result = await AuthService.resetPasswordForEmail(email);
+    if (result.error) return { success: false, error: result.error };
     return { success: true };
   }, []);
 
   const resetPassword = useCallback(async (newPassword: string) => {
-    if (newPassword.length < 6) return { success: false, error: 'Password must be at least 6 characters' };
-
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) return { success: false, error: error.message };
+    const result = await AuthService.updatePassword(newPassword);
+    if (result.error) return { success: false, error: result.error };
     return { success: true };
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
     try {
-      const result = await promptAsync();
-      if (result?.type === 'success') {
+      const result = await AuthService.signInWithGoogle();
+      if (result.session?.user) {
+        setSession(result.session);
+        setUser(sessionToProfile(result.session));
+        setIsAuthenticated(true);
         return { success: true };
       }
-      if (result?.type === 'cancel' || result?.type === 'dismiss') {
-        return { success: false, error: 'Sign in cancelled' };
-      }
-      return { success: false, error: 'Google sign in failed' };
+      return { success: false, error: result.error || "Google sign in failed" };
     } catch (e: any) {
-      return { success: false, error: e.message || 'Google sign in failed' };
+      return { success: false, error: e.message || "Google sign in failed" };
     }
-  }, [promptAsync]);
+  }, []);
 
   return (
-    <AuthContext.Provider value={{
-      isAuthenticated, isLoading, user, session,
-      login, signup, logout, updateProfile,
-      requestPasswordReset, resetPassword,
-      signInWithGoogle, googleAuthRequest: request,
-    }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        isLoading,
+        user,
+        session,
+        login,
+        signup,
+        logout,
+        updateProfile,
+        requestPasswordReset,
+        resetPassword,
+        signInWithGoogle,
+        googleAuthRequest: {},
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
