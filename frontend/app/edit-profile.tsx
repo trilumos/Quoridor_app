@@ -161,56 +161,56 @@ export default function EditProfileScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-        <Modal
-          visible={showAvatarViewer}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowAvatarViewer(false)}
-        >
-          <View style={st.avatarModalBackdrop}>
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={() => setShowAvatarViewer(false)}
-            />
-            <View style={st.avatarModalCard}>
-              <Text style={st.avatarModalTitle}>PROFILE IMAGE</Text>
-              <View style={st.avatarModalPreviewWrap}>
-                <View style={st.avatarModalPreview}>
-                  {profile?.avatar_url ? (
-                    <ExpoImage
-                      source={{ uri: profile.avatar_url }}
-                      style={st.avatarModalImage}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <Ionicons
-                      name="person"
-                      size={84}
-                      color={theme.textSecondary}
-                    />
-                  )}
-                </View>
+      <Modal
+        visible={showAvatarViewer}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAvatarViewer(false)}
+      >
+        <View style={st.avatarModalBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowAvatarViewer(false)}
+          />
+          <View style={st.avatarModalCard}>
+            <Text style={st.avatarModalTitle}>PROFILE IMAGE</Text>
+            <View style={st.avatarModalPreviewWrap}>
+              <View style={st.avatarModalPreview}>
+                {profile?.avatar_url ? (
+                  <ExpoImage
+                    source={{ uri: profile.avatar_url }}
+                    style={st.avatarModalImage}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Ionicons
+                    name="person"
+                    size={84}
+                    color={theme.textSecondary}
+                  />
+                )}
               </View>
-              <TouchableOpacity
-                style={st.avatarModalPrimaryBtn}
-                activeOpacity={0.85}
-                onPress={handlePickAvatar}
-              >
-                <Text style={st.avatarModalPrimaryText}>
-                  CHANGE PROFILE PICTURE
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={st.avatarModalSecondaryBtn}
-                activeOpacity={0.8}
-                onPress={() => setShowAvatarViewer(false)}
-              >
-                <Text style={st.avatarModalSecondaryText}>CLOSE</Text>
-              </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              style={st.avatarModalPrimaryBtn}
+              activeOpacity={0.85}
+              onPress={handlePickAvatar}
+            >
+              <Text style={st.avatarModalPrimaryText}>
+                CHANGE PROFILE PICTURE
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={st.avatarModalSecondaryBtn}
+              activeOpacity={0.8}
+              onPress={() => setShowAvatarViewer(false)}
+            >
+              <Text style={st.avatarModalSecondaryText}>CLOSE</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -227,7 +227,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontSize: 34,
       fontFamily: "Inter_800ExtraBold",
       fontWeight: "800",
-      marginTop: 4,
+      marginTop: 12,
     },
     pageSubtitle: {
       color: theme.spaceTextSecondary,

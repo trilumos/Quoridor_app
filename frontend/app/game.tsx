@@ -200,7 +200,8 @@ export default function GameScreen() {
 
     const resumedState = storeSavedGame.game_state as GameState;
     resumeHydratedRef.current = true;
-    moveCountRef.current = resumedState.moveCount[0] + resumedState.moveCount[1];
+    moveCountRef.current =
+      resumedState.moveCount[0] + resumedState.moveCount[1];
     gameOverHandled.current = false;
     setGameState(resumedState);
     setActionMode("move");
@@ -1308,7 +1309,11 @@ const createStyles = (
     boardWrap: { alignItems: "center" },
     boardWrapFlipped: { transform: [{ rotate: "180deg" }] },
     topSideInverted: { transform: [{ rotate: "180deg" }] },
-    bottomCard: { flexShrink: 0, marginTop: -6, transform: [{ translateY: -16 }] },
+    bottomCard: {
+      flexShrink: 0,
+      marginTop: -6,
+      transform: [{ translateY: -16 }],
+    },
     faceControlsTop: { flexShrink: 0, marginTop: 2 },
     faceControlsBottom: { flexShrink: 0, marginTop: 2 },
     bottomControlsSingle: { flexShrink: 0, marginTop: -8 },
