@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import * as NavigationBar from "expo-navigation-bar";
+import * as SystemUI from "expo-system-ui";
 import {
   useFonts,
   Inter_400Regular,
@@ -90,14 +91,37 @@ function AppNavigator() {
     if (Platform.OS !== "android") return;
 
     const syncAndroidNavBar = async () => {
-      await NavigationBar.setPositionAsync("relative");
-      await NavigationBar.setBehaviorAsync("inset-swipe");
-      await NavigationBar.setBackgroundColorAsync(
-        settings.darkMode ? "#121212" : "#F6F4F1",
-      );
-      await NavigationBar.setButtonStyleAsync(
-        settings.darkMode ? "light" : "dark",
-      );
+      const navColor = settings.darkMode ? "#0D0D0D" : "#F7F4EE";
+
+      try {
+        await SystemUI.setBackgroundColorAsync(navColor);
+      } catch {}
+
+      try {
+        await NavigationBar.setPositionAsync("relative");
+      } catch {}
+
+      try {
+        await NavigationBar.setBehaviorAsync("inset-swipe");
+      } catch {}
+
+      try {
+        await NavigationBar.setBackgroundColorAsync(navColor);
+      } catch {}
+
+      try {
+        await NavigationBar.setBorderColorAsync(navColor);
+      } catch {}
+
+      try {
+        await NavigationBar.setButtonStyleAsync(
+          settings.darkMode ? "light" : "dark",
+        );
+      } catch {}
+
+      try {
+        await NavigationBar.setVisibilityAsync("visible");
+      } catch {}
     };
 
     void syncAndroidNavBar();
@@ -105,7 +129,11 @@ function AppNavigator() {
 
   return (
     <>
-      <StatusBar style={settings.darkMode ? "light" : "dark"} />
+      <StatusBar
+        style={settings.darkMode ? "light" : "dark"}
+        backgroundColor={theme.background}
+        translucent={false}
+      />
       <Stack
         screenOptions={{
           headerShown: false,

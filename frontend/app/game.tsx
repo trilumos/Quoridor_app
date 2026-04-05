@@ -627,6 +627,17 @@ export default function GameScreen() {
   return (
     <SafeAreaView testID="game-screen" style={st.container}>
       <View style={st.main}>
+        <View style={st.topNavRow}>
+          <TouchableOpacity
+            testID="game-back-btn"
+            style={st.backBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={20} color={theme.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
         {/* Top Player Info */}
         <View
           style={[
@@ -1266,15 +1277,41 @@ const createStyles = (
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     main: { flex: 1, paddingHorizontal: 16, paddingBottom: 8 },
-    topCard: { flexShrink: 0 },
-    boardSection: { flex: 1, justifyContent: "center" },
+    topNavRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      marginTop: 2,
+      marginBottom: 2,
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "transparent",
+      borderWidth: 0,
+    },
+    topCard: {
+      flexShrink: 0,
+      marginTop: 8,
+      marginBottom: -6,
+      transform: [{ translateY: 14 }],
+    },
+    boardSection: {
+      flex: 1,
+      justifyContent: "center",
+      marginTop: 0,
+      marginBottom: 0,
+    },
     boardWrap: { alignItems: "center" },
     boardWrapFlipped: { transform: [{ rotate: "180deg" }] },
     topSideInverted: { transform: [{ rotate: "180deg" }] },
-    bottomCard: { flexShrink: 0 },
+    bottomCard: { flexShrink: 0, marginTop: -6, transform: [{ translateY: -16 }] },
     faceControlsTop: { flexShrink: 0, marginTop: 2 },
     faceControlsBottom: { flexShrink: 0, marginTop: 2 },
-    bottomControlsSingle: { flexShrink: 0 },
+    bottomControlsSingle: { flexShrink: 0, marginTop: -8 },
     bottomUtility: { flexShrink: 0 },
     layoutSwitchBar: {
       flexDirection: "row",
@@ -1313,9 +1350,9 @@ const createStyles = (
       flexDirection: "row",
       backgroundColor: theme.elevated,
       borderRadius: 10,
-      marginTop: 8,
-      padding: 3,
-      gap: 3,
+      marginTop: 4,
+      padding: 2,
+      gap: 2,
     },
     modeToggleCompact: { marginTop: 4 },
     modeHalf: {
@@ -1324,12 +1361,12 @@ const createStyles = (
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
-      paddingVertical: 10,
+      paddingVertical: 8,
       borderWidth: 1,
       borderColor: "transparent",
       borderRadius: 8,
     },
-    modeHalfCompact: { paddingVertical: 7 },
+    modeHalfCompact: { paddingVertical: 6 },
     modeHalfActive: {
       backgroundColor: "rgba(255,122,0,0.13)",
       borderColor: darkMode ? "rgba(255,152,64,0.65)" : "rgba(233,106,0,0.58)",
@@ -1365,7 +1402,7 @@ const createStyles = (
       borderRadius: 14,
       paddingHorizontal: 10,
       paddingVertical: 8,
-      marginTop: 5,
+      marginTop: 0,
     },
     playerCard: { position: "relative", overflow: "hidden" },
     playerPinstripe: {
@@ -1381,11 +1418,12 @@ const createStyles = (
       width: 40,
       height: 40,
       borderRadius: 20,
+      overflow: "hidden",
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 2,
     },
-    avatarImage: { width: "100%", height: "100%" },
+    avatarImage: { width: "100%", height: "100%", borderRadius: 20 },
     infoMid: { flex: 1 },
     infoLabel: {
       color: theme.textSecondary,

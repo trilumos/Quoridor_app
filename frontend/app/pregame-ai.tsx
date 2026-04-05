@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -51,7 +50,6 @@ export default function PregameAI() {
   const [selected, setSelected] = useState<Difficulty | null>(
     () => (savedAiGame?.difficulty as Difficulty | null) ?? null,
   );
-  const [showResumePrompt, setShowResumePrompt] = useState(false);
   const theme = getThemeColors(settings.darkMode);
   const st = useMemo(() => createStyles(theme), [theme]);
 
@@ -60,10 +58,6 @@ export default function PregameAI() {
       setSelected(savedAiGame.difficulty as Difficulty);
     }
   }, [savedAiGame?.difficulty, selected]);
-
-  useEffect(() => {
-    setShowResumePrompt(!!savedAiGame);
-  }, [savedAiGame]);
 
   const buildGameParams = (difficulty: Difficulty, resume = false) => ({
     pathname: "/game",
@@ -89,26 +83,6 @@ export default function PregameAI() {
       await deleteSavedGame(user.id);
     }
     router.push(buildGameParams(selected) as never);
-  };
-
-  const handleResume = () => {
-    if (!savedAiGame) return;
-    setShowResumePrompt(false);
-    router.push(
-      buildGameParams(
-        (savedAiGame.difficulty as Difficulty) || "easy",
-        true,
-      ) as never,
-    );
-  };
-
-  const handleNewGameFromPrompt = async () => {
-    const difficulty = selected || (savedAiGame?.difficulty as Difficulty) || "easy";
-    if (savedAiGame && user?.id) {
-      await deleteSavedGame(user.id);
-    }
-    setShowResumePrompt(false);
-    router.push(buildGameParams(difficulty) as never);
   };
 
   return (
@@ -195,40 +169,6 @@ export default function PregameAI() {
         </View>
       </View>
 
-      <Modal
-        visible={showResumePrompt}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowResumePrompt(false)}
-      >
-        <View style={st.resumeBackdrop}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setShowResumePrompt(false)}
-          />
-          <View style={st.resumeCard}>
-            <Text style={st.resumeTitle}>SAVED AI MATCH FOUND</Text>
-            <Text style={st.resumeBody}>
-              You can continue the unfinished game or start a fresh AI match.
-            </Text>
-            <TouchableOpacity
-              style={st.resumePrimaryBtn}
-              activeOpacity={0.85}
-              onPress={handleResume}
-            >
-              <Text style={st.resumePrimaryText}>RESUME GAME</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={st.resumeSecondaryBtn}
-              activeOpacity={0.85}
-              onPress={handleNewGameFromPrompt}
-            >
-              <Text style={st.resumeSecondaryText}>START NEW GAME</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
