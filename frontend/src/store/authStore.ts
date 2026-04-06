@@ -39,14 +39,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       await get().fetchProfile();
     } else {
-      const demoSession = AuthService.createDemoSession();
-      await AuthService.setSession(demoSession);
       set({
-        user: demoSession.user,
-        session: demoSession,
-        isAuthenticated: true,
+        user: null,
+        session: null,
+        profile: null,
+        isAuthenticated: false,
       });
-      await get().fetchProfile();
     }
     set({ isLoading: false });
 

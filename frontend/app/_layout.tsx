@@ -91,7 +91,8 @@ function AppNavigator() {
     if (Platform.OS !== "android") return;
 
     const syncAndroidNavBar = async () => {
-      const navColor = settings.darkMode ? "#0D0D0D" : "#F7F4EE";
+      const navColor = theme.background;
+      const navButtonStyle = settings.darkMode ? "light" : "dark";
 
       try {
         await SystemUI.setBackgroundColorAsync(navColor);
@@ -114,9 +115,7 @@ function AppNavigator() {
       } catch {}
 
       try {
-        await NavigationBar.setButtonStyleAsync(
-          settings.darkMode ? "light" : "dark",
-        );
+        await NavigationBar.setButtonStyleAsync(navButtonStyle);
       } catch {}
 
       try {
@@ -125,7 +124,7 @@ function AppNavigator() {
     };
 
     void syncAndroidNavBar();
-  }, [settings.darkMode]);
+  }, [settings.darkMode, theme.background]);
 
   return (
     <>
@@ -158,6 +157,8 @@ function AppNavigator() {
         <Stack.Screen name="subscription" />
         <Stack.Screen name="ad-interstitial" />
         <Stack.Screen name="daily-puzzle" />
+        <Stack.Screen name="game-over" />
+        <Stack.Screen name="match-result" />
       </Stack>
     </>
   );
