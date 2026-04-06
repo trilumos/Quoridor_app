@@ -8,9 +8,10 @@ import { AuthService } from "../src/services/AuthService";
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { isLoading, profile, isAuthenticated, fetchProfile } = useAuthStore();
+  const { isLoading, profile, isAuthenticated } = useAuthStore();
   const [promptReady, setPromptReady] = useState(false);
   const [promptSeen, setPromptSeen] = useState<boolean | null>(null);
+  const [freshInstallHandled, setFreshInstallHandled] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -34,19 +35,33 @@ export default function SplashScreen() {
   useEffect(() => {
     if (isLoading || !promptReady || promptSeen === null) return;
 
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !freshInstallHandled) {
       // Fresh install: create anonymous session for onboarding
+      setFreshInstallHandled(true);
       const anonSession = AuthService.createDemoSession();
       void (async () => {
-        await AuthService.setSession(anonSession);
-        // Update store immediately with the new session
-        useAuthStore.setState({
-          user: anonSession.user,
-          session: anonSession,
-          isAuthenticated: true,
-        });
-        // Fetch/create profile for this anonymous user
-        await fetchProfile();
+        try {
+          await AuthService.setSession(anonSession);
+          // Direct call to the store to fetch profile
+          const { user: currentUser } = useAuthStore.getState();
+          if (!currentUser) {
+            // Explicitly set the authenticated session
+            useAuthStore.setState({
+              user: anonSession.user,
+              session: anonSession,
+              isAuthenticated: true,
+            });
+          }
+          // Now fetch/create the profile
+          await useAuthStore.getState().fetchProfile();
+          // Route to profile editing
+          router.replace({
+            pathname: "/edit-profile",
+            params: { firstRun: "true" },
+          } as never);
+        } catch (err) {
+          console.warn("Fresh install setup failed:", err);
+        }
       })();
       return;
     }
@@ -69,7 +84,7 @@ export default function SplashScreen() {
     }
 
     router.replace("/(tabs)" as never);
-  }, [isLoading, promptReady, promptSeen, isAuthenticated, profile, router, fetchProfile]);
+  }, [isLoading, promptReady, promptSeen, isAuthenticated, profile, router, freshInstallHandled]);
 
   return (
     <View testID="splash-screen" style={styles.container}>
