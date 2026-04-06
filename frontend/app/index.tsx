@@ -4,10 +4,11 @@ import { useRouter } from "expo-router";
 import { COLORS } from "../src/theme/colors";
 import { StorageService } from "../src/storage/StorageService";
 import { useAuthStore } from "../src/store/authStore";
+import { AuthService } from "../src/services/AuthService";
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { isLoading, profile, isAuthenticated } = useAuthStore();
+  const { isLoading, profile, isAuthenticated, fetchProfile } = useAuthStore();
   const [promptReady, setPromptReady] = useState(false);
   const [promptSeen, setPromptSeen] = useState<boolean | null>(null);
 
@@ -34,7 +35,19 @@ export default function SplashScreen() {
     if (isLoading || !promptReady || promptSeen === null) return;
 
     if (!isAuthenticated) {
-      router.replace("/login" as never);
+      // Fresh install: create anonymous session for onboarding
+      const anonSession = AuthService.createDemoSession();
+      void (async () => {
+        await AuthService.setSession(anonSession);
+        // Update store immediately with the new session
+        useAuthStore.setState({
+          user: anonSession.user,
+          session: anonSession,
+          isAuthenticated: true,
+        });
+        // Fetch/create profile for this anonymous user
+        await fetchProfile();
+      })();
       return;
     }
 
@@ -56,7 +69,7 @@ export default function SplashScreen() {
     }
 
     router.replace("/(tabs)" as never);
-  }, [isLoading, promptReady, promptSeen, isAuthenticated, profile, router]);
+  }, [isLoading, promptReady, promptSeen, isAuthenticated, profile, router, fetchProfile]);
 
   return (
     <View testID="splash-screen" style={styles.container}>
