@@ -17,7 +17,7 @@ function profileKey(userId: string) {
 function createDefaultProfile(userId: string): Profile {
   return {
     user_id: userId,
-    username: "ARCHITECT_X",
+    username: "",
     avatar_url: null,
     is_premium: false,
     premium_tier: null,

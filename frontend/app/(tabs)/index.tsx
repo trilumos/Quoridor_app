@@ -20,6 +20,26 @@ import {
   StatsService,
 } from "../../src/services/StatsService";
 
+function formatDuration(totalSec: number): string {
+  const clamped = Math.max(0, Math.floor(totalSec));
+  const units: Array<{ label: string; seconds: number }> = [
+    { label: "y", seconds: 365 * 24 * 60 * 60 },
+    { label: "mo", seconds: 30 * 24 * 60 * 60 },
+    { label: "w", seconds: 7 * 24 * 60 * 60 },
+    { label: "d", seconds: 24 * 60 * 60 },
+    { label: "h", seconds: 60 * 60 },
+    { label: "m", seconds: 60 },
+  ];
+
+  for (const unit of units) {
+    if (clamped >= unit.seconds) {
+      return `${Math.floor(clamped / unit.seconds)}${unit.label}`;
+    }
+  }
+
+  return `${clamped}s`;
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { settings, stats: ctxStats } = useGameContext();
@@ -67,6 +87,7 @@ export default function HomeScreen() {
           selectedBucket.total_duration_seconds / selectedBucket.total_games,
         )
       : 0;
+  const averageDurationLabel = formatDuration(averageDuration);
 
   const difficultyLabel = difficulty.toUpperCase();
 
@@ -169,7 +190,7 @@ export default function HomeScreen() {
             </View>
             <View style={s.statCell}>
               <Text style={s.statLabel}>AVERAGE DURATION</Text>
-              <Text style={s.statValue}>{`${averageDuration}s`}</Text>
+              <Text style={s.statValue}>{averageDurationLabel}</Text>
               <Text style={s.statSub}>TO COMPLETE A GAME</Text>
             </View>
           </View>

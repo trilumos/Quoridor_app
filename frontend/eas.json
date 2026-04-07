@@ -5,12 +5,24 @@
   },
   "build": {
     "preview": {
+      "environment": "preview",
+      "channel": "preview",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production-apk": {
+      "environment": "production",
+      "channel": "production",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "environment": "production",
+      "channel": "production",
       "android": {
         "buildType": "app-bundle"
       }

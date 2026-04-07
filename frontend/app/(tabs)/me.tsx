@@ -37,9 +37,22 @@ const ACHIEVEMENT_MAP: Record<string, { name: string; desc: string }> = {
 
 function formatDuration(totalSec: number): string {
   const clamped = Math.max(0, Math.floor(totalSec));
-  if (clamped < 60) return `${clamped}s`;
-  if (clamped < 3600) return `${Math.floor(clamped / 60)}m`;
-  return `${Math.floor(clamped / 3600)}h`;
+  const units: Array<{ label: string; seconds: number }> = [
+    { label: "y", seconds: 365 * 24 * 60 * 60 },
+    { label: "mo", seconds: 30 * 24 * 60 * 60 },
+    { label: "w", seconds: 7 * 24 * 60 * 60 },
+    { label: "d", seconds: 24 * 60 * 60 },
+    { label: "h", seconds: 60 * 60 },
+    { label: "m", seconds: 60 },
+  ];
+
+  for (const unit of units) {
+    if (clamped >= unit.seconds) {
+      return `${Math.floor(clamped / unit.seconds)}${unit.label}`;
+    }
+  }
+
+  return `${clamped}s`;
 }
 
 export default function ProfileScreen() {
@@ -57,7 +70,7 @@ export default function ProfileScreen() {
   const [showAvatarViewer, setShowAvatarViewer] = useState(false);
 
   const displayName =
-    profile?.username || user?.user_metadata?.display_name || "COMMANDER";
+    profile?.username || user?.user_metadata?.display_name || "PLAYER";
   const memberSince = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString("en-US", {
         month: "long",
@@ -121,7 +134,10 @@ export default function ProfileScreen() {
   const overallGames = overallBucket?.total_games ?? 0;
 
   return (
-    <SafeAreaView style={[st.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={[st.container, { backgroundColor: theme.background }]}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={st.scroll}

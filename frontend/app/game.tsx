@@ -10,7 +10,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -43,6 +42,7 @@ import { useAuthStore } from "../src/store/authStore";
 import { useStatsStore } from "../src/store/statsStore";
 import { useGameStore } from "../src/store/gameStore";
 import { FeedbackService } from "../src/services/FeedbackService";
+
 
 type LogEntry = { num: number; type: string; detail: string };
 type MatchHistoryEntry = {
@@ -91,18 +91,24 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
-function getCardTextPalette(playerColor: string) {
-  const rgb = hexToRgb(playerColor);
-  if (!rgb) {
-    return { textPrimary: "#111111", textSecondary: "rgba(17, 17, 17, 0.72)" };
+function getCardTextPalette(accent: string, darkMode: boolean, isActive: boolean) {
+  if (isActive) {
+    return {
+      textPrimary: darkMode ? "#F8F6F2" : "#111111",
+      textSecondary: darkMode ? "rgba(248, 246, 242, 0.78)" : "rgba(17, 17, 17, 0.72)",
+      controlBorder: withAlpha(accent, 0.42),
+    };
   }
-  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
-  if (luminance > 0.48) {
-    return { textPrimary: "#111111", textSecondary: "rgba(17, 17, 17, 0.72)" };
-  }
-  return { textPrimary: "#F8F6F2", textSecondary: "rgba(248, 246, 242, 0.78)" };
-}
 
+  const neutralText = darkMode ? "rgba(248, 246, 242, 0.68)" : "rgba(26, 26, 26, 0.68)";
+  return {
+    textPrimary: neutralText,
+    textSecondary: neutralText,
+    controlBorder: darkMode
+      ? "rgba(248, 246, 242, 0.16)"
+      : "rgba(26, 26, 26, 0.16)",
+  };
+}
 export default function GameScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -138,7 +144,7 @@ export default function GameScreen() {
       : (params.difficulty as AIDifficulty)) || "easy";
   const localTimeSec = Math.max(0, Number(params.localTimeSec || 0));
   const p1Name =
-    (params.p1Name as string) || profile?.username || "ARCHITECT_X";
+    (params.p1Name as string) || profile?.username || "PLAYER";
   const p2Name =
     mode === "ai"
       ? (params.p2Name as string) || "KAI_ZEN_01"
@@ -160,7 +166,6 @@ export default function GameScreen() {
   const [aiThinking, setAiThinking] = useState(false);
   const [message, setMessage] = useState("");
   const [moveLog, setMoveLog] = useState<LogEntry[]>([]);
-  const [showLogPopup, setShowLogPopup] = useState(false);
   const [achievementQueue, setAchievementQueue] = useState<string[]>([]);
   const [localLayoutMode, setLocalLayoutMode] =
     useState<LocalLayoutMode>("flip-turn");
@@ -350,7 +355,7 @@ export default function GameScreen() {
               created_at: new Date().toISOString(),
               opponent: gameState.players[1].name,
               player_name: gameState.players[0].name,
-              winner_index: gameState.winner,
+              winner_index: (gameState.winner ?? 0) as 0 | 1,
               move_log: moveLogAsc,
             };
 
@@ -596,677 +601,529 @@ export default function GameScreen() {
   const bottomPlayerIndex = useFaceToFace ? 0 : flipForPlayer2 ? 1 : 0;
   const topPlayer = gameState.players[topPlayerIndex];
   const bottomPlayer = gameState.players[bottomPlayerIndex];
-  const topPlayerColor = topPlayerIndex === 0 ? theme.player1 : theme.player2;
-  const bottomPlayerColor =
-    bottomPlayerIndex === 0 ? theme.player1 : theme.player2;
-  const topIsActive = cp === topPlayerIndex;
-  const bottomIsActive = cp === bottomPlayerIndex;
-  const topCardColors = getCardTextPalette(topPlayerColor);
-  const bottomCardColors = getCardTextPalette(bottomPlayerColor);
-  const topCardBg = topPlayerColor;
-  const bottomCardBg = bottomPlayerColor;
-  const inactiveCardStyle = {
-    backgroundColor: theme.elevated,
-    borderColor: theme.border,
-    borderWidth: 1,
-  };
-  const cardWallAvailableColor = "#E96A00";
-  const cardWallUsedColor = "rgba(233, 106, 0, 0.26)";
   const topLabel = isPassAndPlay ? `PLAYER ${topPlayerIndex + 1}` : "OPPONENT";
   const bottomLabel = isPassAndPlay ? `PLAYER ${bottomPlayerIndex + 1}` : "YOU";
-  const showPlayerAvatar =
-    mode === "ai" && bottomLabel === "YOU" && !!profile?.avatar_url;
   const topSideCanAct =
     !useFaceToFace ||
     (!gameState.gameOver && !aiThinking && cp === topPlayerIndex);
   const bottomSideCanAct =
     !useFaceToFace ||
     (!gameState.gameOver && !aiThinking && cp === bottomPlayerIndex);
-  const reservedUiHeight = useFaceToFace ? 340 : 280;
-  const boardSize = Math.max(250, Math.min(sw - 20, sh - reservedUiHeight));
+  const topIsActive = cp === topPlayerIndex;
+  const topCardColors = getCardTextPalette(theme.accent, settings.darkMode, topIsActive);
+  const bottomCardColors = getCardTextPalette(
+    theme.accent,
+    settings.darkMode,
+    bottomSideCanAct,
+  );
+  const reservedUiHeight = useFaceToFace ? 390 : 340;
+  const boardSize = Math.max(232, Math.min(sw - 68, sh - reservedUiHeight));
+
+  const handleMoveMode = useCallback(() => {
+    setActionMode("move");
+    setSelectedIntersection(null);
+    setWallPreview(null);
+  }, []);
+
+  const handleWallMode = useCallback(() => {
+    if (!isHuman || gameState.players[cp].wallsRemaining <= 0) return;
+    setActionMode("wall");
+  }, [cp, gameState.players, isHuman]);
+
+  const renderBasicPlayerCard = ({
+    label,
+    name,
+    status,
+    wallsRemaining,
+    palette,
+    avatarUrl,
+    iconName,
+    active,
+    mirrored,
+  }: {
+    label: string;
+    name: string;
+    status: string;
+    wallsRemaining: number;
+    palette: { textPrimary: string; textSecondary: string };
+    avatarUrl?: string | null;
+    iconName: keyof typeof Ionicons.glyphMap;
+    active: boolean;
+    mirrored?: boolean;
+  }) => {
+    const cardShellStyle = [active && st.cardGlowWrap, mirrored && st.cardMirrored];
+
+    return (
+      <View style={cardShellStyle}>
+        <View
+          style={[
+            st.playerCard,
+            st.basicCard,
+            active && st.basicCardActive,
+            {
+              backgroundColor: settings.darkMode ? "#1D1D1D" : "#F7F7F3",
+              borderColor: active
+                ? settings.darkMode
+                  ? "rgba(248, 246, 242, 0.92)"
+                  : "rgba(26, 26, 26, 0.92)"
+                : settings.darkMode
+                  ? "rgba(248, 246, 242, 0.14)"
+                  : "rgba(26, 26, 26, 0.12)",
+            },
+          ]}
+        >
+          <View style={st.cardBody}>
+            <View style={st.cardHeaderRow}>
+              <View style={st.cardIdentity}>
+                <View
+                  style={[
+                    st.avatarShell,
+                    {
+                      borderColor: settings.darkMode
+                        ? "rgba(248, 246, 242, 0.14)"
+                        : "rgba(26, 26, 26, 0.12)",
+                      backgroundColor: settings.darkMode
+                        ? "rgba(248, 246, 242, 0.05)"
+                        : "rgba(26, 26, 26, 0.04)",
+                    },
+                  ]}
+                >
+                  {avatarUrl ? (
+                    <ExpoImage source={{ uri: avatarUrl }} style={st.avatarImage} contentFit="cover" />
+                  ) : (
+                    <Ionicons name={iconName} size={21} color={palette.textPrimary} />
+                  )}
+                </View>
+                <View style={st.cardNameBlock}>
+                  <Text style={[st.cardLabel, { color: palette.textSecondary }]}>{label}</Text>
+                  <Text style={[st.cardName, { color: palette.textPrimary }]}>{name}</Text>
+                </View>
+              </View>
+              <View
+                style={[
+                  st.cardStatusPill,
+                  {
+                    backgroundColor: settings.darkMode
+                      ? "rgba(248, 246, 242, 0.05)"
+                      : "rgba(26, 26, 26, 0.04)",
+                    borderColor: settings.darkMode
+                      ? "rgba(248, 246, 242, 0.10)"
+                      : "rgba(26, 26, 26, 0.08)",
+                  },
+                ]}
+              >
+                <Text style={[st.cardStatusText, { color: palette.textPrimary }]}>{status}</Text>
+              </View>
+            </View>
+
+            <View style={st.cardFooterRow}>
+              <View>
+                <Text style={[st.cardMetaLabel, { color: palette.textSecondary }]}>WALLS LEFT</Text>
+                <Text style={[st.cardMetaValue, { color: palette.textPrimary }]}>{wallsRemaining}</Text>
+              </View>
+              <View>
+                <Text style={[st.cardMetaLabel, { color: palette.textSecondary }]}>STATUS</Text>
+                <Text style={[st.cardMetaValue, { color: palette.textPrimary }]}>{active ? "LIVE" : "WAITING"}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderActivePlayerCard = ({
+    label,
+    name,
+    status,
+    wallsRemaining,
+    palette,
+    avatarUrl,
+    iconName,
+    canAct,
+    timeValue,
+    showTime,
+    onMoveMode,
+    onWallMode,
+    onConfirm,
+    mirrored,
+  }: {
+    label: string;
+    name: string;
+    status: string;
+    wallsRemaining: number;
+    palette: { textPrimary: string; textSecondary: string };
+    avatarUrl?: string | null;
+    iconName: keyof typeof Ionicons.glyphMap;
+    canAct: boolean;
+    timeValue?: string;
+    showTime: boolean;
+    onMoveMode: () => void;
+    onWallMode: () => void;
+    onConfirm: () => void;
+    mirrored?: boolean;
+  }) => {
+    const cardShellStyle = [canAct && st.cardGlowWrap, mirrored && st.cardMirrored];
+    const moveActive = canAct && actionMode === "move";
+    const wallActive = canAct && actionMode === "wall";
+    const confirmEnabled = canAct && wallActive;
+    const controlAccentColor = canAct ? theme.accent : null;
+    const controlBorderColor = controlAccentColor
+      ? withAlpha(theme.accent, 0.5)
+      : settings.darkMode
+        ? "rgba(248, 246, 242, 0.16)"
+        : "rgba(26, 26, 26, 0.16)";
+    const controlIdleBg = settings.darkMode
+      ? "rgba(255, 122, 0, 0.22)"
+      : "rgba(255, 122, 0, 0.14)";
+    const controlActiveBg = theme.accent;
+    const controlIdleTextColor = settings.darkMode
+      ? "rgba(248, 246, 242, 0.82)"
+      : "rgba(26, 26, 26, 0.82)";
+    const controlActiveTextColor = settings.darkMode ? "#F8F6F2" : "#111111";
+    const wallColorForToggle = wallActive
+      ? settings.darkMode
+        ? "#111111"
+        : "#FFFFFF"
+      : controlIdleTextColor;
+    const confirmBg = canAct && wallActive ? controlActiveBg : controlIdleBg;
+    const confirmBorder = controlBorderColor;
+    const confirmText = canAct && wallActive ? controlActiveTextColor : controlIdleTextColor;
+
+    return (
+      <View style={cardShellStyle}>
+        <View
+          style={[
+            st.playerCard,
+            st.activeCard,
+            canAct && st.activeCardCurrent,
+            {
+              backgroundColor: settings.darkMode ? "#1D1D1D" : "#F7F7F3",
+              borderColor: canAct
+                ? settings.darkMode
+                  ? "rgba(248, 246, 242, 0.92)"
+                  : "rgba(26, 26, 26, 0.92)"
+                : settings.darkMode
+                  ? "rgba(248, 246, 242, 0.14)"
+                  : "rgba(26, 26, 26, 0.12)",
+            },
+          ]}
+        >
+          <View style={st.cardBody}>
+            <View style={st.cardHeaderRow}>
+              <View style={st.cardIdentity}>
+                <View
+                  style={[
+                    st.avatarShell,
+                    {
+                      backgroundColor: settings.darkMode
+                        ? "rgba(248, 246, 242, 0.05)"
+                        : "rgba(26, 26, 26, 0.04)",
+                      borderColor: settings.darkMode
+                        ? "rgba(248, 246, 242, 0.14)"
+                        : "rgba(26, 26, 26, 0.12)",
+                    },
+                  ]}
+                >
+                  {avatarUrl ? (
+                    <ExpoImage source={{ uri: avatarUrl }} style={st.avatarImage} contentFit="cover" />
+                  ) : (
+                    <Ionicons name={iconName} size={21} color={palette.textPrimary} />
+                  )}
+                </View>
+                <View style={st.cardNameBlock}>
+                  <Text style={[st.cardLabel, { color: palette.textSecondary }]}>{label}</Text>
+                  <Text style={[st.cardName, { color: palette.textPrimary }]}>{name}</Text>
+                </View>
+              </View>
+              <View style={[st.turnBadge, canAct ? st.turnBadgeActive : st.turnBadgeIdle]}>
+                <Text
+                  style={[
+                    st.turnBadgeText,
+                    {
+                      color: canAct
+                        ? settings.darkMode
+                          ? "#F8F6F2"
+                          : "#111111"
+                        : palette.textPrimary,
+                    },
+                  ]}
+                >
+                  {status}
+                </Text>
+              </View>
+            </View>
+
+            <View style={st.cardFooterRow}>
+              <View>
+                <Text style={[st.cardMetaLabel, { color: palette.textSecondary }]}>WALLS LEFT</Text>
+                <Text style={[st.cardMetaValue, { color: palette.textPrimary }]}>{wallsRemaining}</Text>
+              </View>
+              <View>
+                <Text style={[st.cardMetaLabel, { color: palette.textSecondary }]}>TURN</Text>
+                <Text style={[st.cardMetaValue, { color: palette.textPrimary }]}>{canAct ? "ACTIVE" : "WAITING"}</Text>
+              </View>
+              {showTime && timeValue ? (
+                <View>
+                  <Text style={[st.cardMetaLabel, { color: palette.textSecondary }]}>TIME</Text>
+                  <Text style={[st.cardMetaValue, { color: palette.textPrimary }]}>{timeValue}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={st.actionBarWrap}>
+              <View style={st.actionToggleBar}>
+                <TouchableOpacity
+                  style={[
+                    st.actionToggle,
+                    { backgroundColor: moveActive ? controlActiveBg : controlIdleBg, borderColor: controlBorderColor },
+                    moveActive && {
+                      backgroundColor: controlActiveBg,
+                      borderColor: controlBorderColor,
+                      borderWidth: 1.5,
+                    },
+                    !canAct && st.actionToggleDisabled,
+                  ]}
+                  onPress={onMoveMode}
+                  activeOpacity={0.8}
+                  disabled={!canAct}
+                >
+                  <Ionicons
+                    name="person-outline"
+                    size={15}
+                    color={moveActive ? controlActiveTextColor : controlIdleTextColor}
+                  />
+                  <Text
+                    style={[
+                      st.actionToggleText,
+                      { color: moveActive ? controlActiveTextColor : controlIdleTextColor },
+                    ]}
+                  >
+                    MOVE
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.actionToggle,
+                    { backgroundColor: wallActive ? controlActiveBg : controlIdleBg, borderColor: controlBorderColor },
+                    wallActive && {
+                      backgroundColor: controlActiveBg,
+                      borderColor: controlBorderColor,
+                      borderWidth: 1.5,
+                    },
+                    !canAct && st.actionToggleDisabled,
+                  ]}
+                  onPress={onWallMode}
+                  activeOpacity={0.8}
+                  disabled={!canAct || wallsRemaining <= 0}
+                >
+                  <WallIcon
+                    remaining={Math.max(0, Math.min(10, wallsRemaining))}
+                    availableColor={wallColorForToggle}
+                  />
+                  <Text
+                    style={[
+                      st.actionToggleText,
+                      { color: wallActive ? controlActiveTextColor : controlIdleTextColor },
+                    ]}
+                  >
+                    WALL
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  st.confirmButton,
+                  { backgroundColor: confirmBg, borderColor: confirmBorder },
+                  canAct && wallActive && {
+                    backgroundColor: controlActiveBg,
+                    borderColor: controlBorderColor,
+                    borderWidth: 1.5,
+                  },
+                  !canAct && st.actionToggleDisabled,
+                ]}
+                onPress={confirmEnabled ? onConfirm : undefined}
+                activeOpacity={0.85}
+                disabled={!confirmEnabled}
+              >
+                <Text style={[st.confirmButtonText, { color: confirmText }]}>CONFIRM ACTION</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView testID="game-screen" style={st.container}>
-      <View style={st.main}>
-        <View style={st.topNavRow}>
-          <TouchableOpacity
-            testID="game-back-btn"
-            style={st.backBtn}
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="arrow-back" size={20} color={theme.textPrimary} />
-          </TouchableOpacity>
-        </View>
+      <View style={st.screen}>
+        <View style={st.main}>
+          <View style={st.content}>
+            <View style={st.cardStackTop}>
+              {mode === "ai"
+                ? renderBasicPlayerCard({
+                    label: topLabel,
+                    name: topPlayer.name,
+                    status: topIsActive ? "ACTIVE" : "WAITING",
+                    wallsRemaining: topPlayer.wallsRemaining,
+                    palette: topCardColors,
+                    avatarUrl: null,
+                    iconName: "hardware-chip-outline",
+                    active: topIsActive,
+                  })
+                : useFaceToFace
+                  ? renderActivePlayerCard({
+                      label: topLabel,
+                      name: topPlayer.name,
+                      status: topSideCanAct ? "YOUR TURN" : "WAITING",
+                      wallsRemaining: topPlayer.wallsRemaining,
+                      palette: topCardColors,
+                      avatarUrl: null,
+                      iconName: "person-outline",
+                      canAct: topSideCanAct,
+                      showTime: isTimedLocal,
+                      timeValue: isTimedLocal
+                        ? formatClock(remainingSeconds[topPlayerIndex])
+                        : undefined,
+                      onMoveMode: handleMoveMode,
+                      onWallMode: handleWallMode,
+                      onConfirm: handlePlaceWall,
+                      mirrored: true,
+                    })
+                  : renderBasicPlayerCard({
+                      label: topLabel,
+                      name: topPlayer.name,
+                      status: "WAITING",
+                      wallsRemaining: topPlayer.wallsRemaining,
+                      palette: topCardColors,
+                      avatarUrl: null,
+                      iconName: "person-outline",
+                      active: false,
+                    })}
+            </View>
 
-        {/* Top Player Info */}
-        <View
-          style={[
-            st.infoCard,
-            st.topCard,
-            st.playerCard,
-            topIsActive
-              ? {
-                  backgroundColor: topCardBg,
-                  borderColor: withAlpha(topPlayerColor, 0.42),
-                  borderWidth: 1.2,
-                }
-              : inactiveCardStyle,
-            useFaceToFace && st.topSideInverted,
-          ]}
-        >
-          <View
-            style={[st.playerPinstripe, { backgroundColor: topPlayerColor }]}
-          />
-          <View style={st.infoRow}>
-            <View
-              style={[
-                st.avatarShell,
-                {
-                  backgroundColor: topIsActive
-                    ? withAlpha(topPlayerColor, 0.34)
-                    : theme.secondaryBg,
-                  borderColor: topIsActive ? topPlayerColor : theme.borderFocus,
-                },
-              ]}
-            >
-              <Ionicons
-                name="person"
-                size={24}
-                color={topIsActive ? topCardColors.textPrimary : topPlayerColor}
+            <View style={st.boardWrap}>
+              <GameBoard
+                gameState={gameState}
+                actionMode={isHuman ? actionMode : "move"}
+                validMoves={isHuman ? validMoves : []}
+                wallPreview={wallPreview}
+                onCellPress={handleCellPress}
+                onIntersectionPress={handleIntersectionPress}
+                boardSize={boardSize}
               />
             </View>
-            <View style={st.infoMid}>
-              <Text
-                style={[
-                  st.infoLabel,
-                  {
-                    color: topIsActive
-                      ? topCardColors.textSecondary
-                      : theme.textSecondary,
-                  },
-                ]}
-              >
-                {topLabel}
-                {cp === topPlayerIndex ? " (ACTIVE)" : ""}
-              </Text>
-              <Text
-                style={[
-                  st.infoName,
-                  topIsActive && { color: topCardColors.textPrimary },
-                ]}
-              >
-                {topPlayer.name}
-              </Text>
-              {isTimedLocal ? (
-                <View style={st.infoMeta}>
-                  <Text
-                    style={[
-                      st.infoMetaLabel,
-                      topIsActive && { color: topCardColors.textSecondary },
-                    ]}
-                  >
-                    TIME LEFT
-                  </Text>
-                  <Text
-                    style={[
-                      st.infoMetaValue,
-                      topIsActive && { color: topCardColors.textPrimary },
-                    ]}
-                  >
-                    {formatClock(remainingSeconds[topPlayerIndex])}
-                  </Text>
-                </View>
-              ) : (
-                <View style={st.infoMeta}>
-                  <Text
-                    style={[
-                      st.infoMetaLabel,
-                      topIsActive && { color: topCardColors.textSecondary },
-                    ]}
-                  >
-                    LOCAL MATCH
-                  </Text>
-                </View>
-              )}
-            </View>
-            <View style={st.wallsCol}>
-              <Text
-                style={[
-                  st.wallsLabel,
-                  topIsActive && { color: topCardColors.textSecondary },
-                ]}
-              >
-                WALLS
-              </Text>
-              <WallIcon
-                remaining={topPlayer.wallsRemaining}
-                availableColor={cardWallAvailableColor}
-                usedColor={cardWallUsedColor}
-              />
-              <Text
-                style={[
-                  st.wallsCount,
-                  topIsActive && { color: topCardColors.textPrimary },
-                ]}
-              >
-                {topPlayer.wallsRemaining}
-              </Text>
-            </View>
-          </View>
-        </View>
 
-        {useFaceToFace && (
-          <View
-            style={[
-              st.faceControlsTop,
-              st.topSideInverted,
-              !topSideCanAct && st.sideControlsDisabled,
-            ]}
-          >
-            <View style={[st.modeToggle, st.modeToggleCompact]}>
-              <TouchableOpacity
-                testID="mode-move-btn-top"
-                style={[
-                  st.modeHalf,
-                  st.modeHalfCompact,
-                  actionMode === "move" && st.modeHalfActive,
-                  !topSideCanAct && st.controlDisabled,
-                ]}
-                onPress={() => {
-                  setActionMode("move");
-                  setSelectedIntersection(null);
-                  setWallPreview(null);
-                }}
-                activeOpacity={0.7}
-                disabled={!topSideCanAct}
-              >
-                <Ionicons
-                  name="arrow-up-outline"
-                  size={16}
-                  color={
-                    actionMode === "move" ? theme.accent : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    st.modeText,
-                    actionMode === "move" && st.modeTextActive,
-                  ]}
-                >
-                  MOVE
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID="mode-wall-btn-top"
-                style={[
-                  st.modeHalf,
-                  st.modeHalfCompact,
-                  actionMode === "wall" && st.modeHalfActive,
-                  !topSideCanAct && st.controlDisabled,
-                ]}
-                onPress={() => setActionMode("wall")}
-                disabled={
-                  !topSideCanAct || gameState.players[cp].wallsRemaining <= 0
-                }
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="reorder-three-outline"
-                  size={16}
-                  color={
-                    actionMode === "wall" ? theme.accent : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    st.modeText,
-                    actionMode === "wall" && st.modeTextActive,
-                  ]}
-                >
-                  WALL
-                </Text>
-              </TouchableOpacity>
+            <View style={st.cardStackBottom}>
+              {mode === "ai"
+                ? renderActivePlayerCard({
+                    label: bottomLabel,
+                    name: bottomPlayer.name,
+                    status: bottomSideCanAct ? "YOUR TURN" : "WAITING",
+                    wallsRemaining: bottomPlayer.wallsRemaining,
+                    palette: bottomCardColors,
+                    avatarUrl: profile?.avatar_url,
+                    iconName: "person-outline",
+                    canAct: bottomSideCanAct,
+                    showTime: isTimedLocal,
+                    timeValue: isTimedLocal
+                      ? formatClock(remainingSeconds[bottomPlayerIndex])
+                      : undefined,
+                    onMoveMode: handleMoveMode,
+                    onWallMode: handleWallMode,
+                    onConfirm: handlePlaceWall,
+                  })
+                : useFaceToFace
+                  ? renderActivePlayerCard({
+                      label: bottomLabel,
+                      name: bottomPlayer.name,
+                      status: bottomSideCanAct ? "YOUR TURN" : "WAITING",
+                      wallsRemaining: bottomPlayer.wallsRemaining,
+                      palette: bottomCardColors,
+                      avatarUrl: null,
+                      iconName: "person-outline",
+                      canAct: bottomSideCanAct,
+                      showTime: isTimedLocal,
+                      timeValue: isTimedLocal
+                        ? formatClock(remainingSeconds[bottomPlayerIndex])
+                        : undefined,
+                      onMoveMode: handleMoveMode,
+                      onWallMode: handleWallMode,
+                      onConfirm: handlePlaceWall,
+                    })
+                  : renderActivePlayerCard({
+                      label: bottomLabel,
+                      name: bottomPlayer.name,
+                      status: bottomSideCanAct ? "YOUR TURN" : "WAITING",
+                      wallsRemaining: bottomPlayer.wallsRemaining,
+                      palette: bottomCardColors,
+                      avatarUrl: null,
+                      iconName: "person-outline",
+                      canAct: bottomSideCanAct,
+                      showTime: isTimedLocal,
+                      timeValue: isTimedLocal
+                        ? formatClock(remainingSeconds[bottomPlayerIndex])
+                        : undefined,
+                      onMoveMode: handleMoveMode,
+                      onWallMode: handleWallMode,
+                      onConfirm: handlePlaceWall,
+                    })}
             </View>
 
-            {actionMode === "wall" && (
-              <TouchableOpacity
-                testID="confirm-btn-top"
-                style={[
-                  st.confirmBtn,
-                  st.confirmBtnCompact,
-                  (!topSideCanAct || !wallPreview) && st.confirmDisabled,
-                ]}
-                onPress={
-                  topSideCanAct && wallPreview ? handlePlaceWall : undefined
-                }
-                activeOpacity={0.85}
-                disabled={!topSideCanAct}
-              >
-                <Text style={st.confirmText}>CONFIRM ACTION</Text>
-              </TouchableOpacity>
+            {isPassAndPlay && (
+              <View style={st.layoutSwitchBar}>
+                <TouchableOpacity
+                  style={[
+                    st.layoutSwitchBtn,
+                    localLayoutMode === "flip-turn" && st.layoutSwitchBtnActive,
+                  ]}
+                  onPress={() => setLocalLayoutMode("flip-turn")}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      st.layoutSwitchText,
+                      localLayoutMode === "flip-turn" && st.layoutSwitchTextActive,
+                    ]}
+                  >
+                    PASS N PLAY
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.layoutSwitchBtn,
+                    localLayoutMode === "face-to-face" && st.layoutSwitchBtnActive,
+                  ]}
+                  onPress={() => setLocalLayoutMode("face-to-face")}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      st.layoutSwitchText,
+                      localLayoutMode === "face-to-face" && st.layoutSwitchTextActive,
+                    ]}
+                  >
+                    FACE TO FACE
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
-        )}
 
-        {/* Board */}
-        <View
-          style={[
-            st.boardSection,
-            st.boardWrap,
-            flipForPlayer2 && st.boardWrapFlipped,
-          ]}
-        >
-          <GameBoard
-            gameState={gameState}
-            actionMode={isHuman ? actionMode : "move"}
-            validMoves={isHuman ? validMoves : []}
-            wallPreview={wallPreview}
-            onCellPress={handleCellPress}
-            onIntersectionPress={handleIntersectionPress}
-            boardSize={boardSize}
+          <AchievementToast
+            queue={achievementQueue}
+            onComplete={() => setAchievementQueue([])}
           />
+
+          {message !== "" && (
+            <View testID="toast-message" style={st.toast}>
+              <Text style={st.toastText}>{message}</Text>
+            </View>
+          )}
         </View>
-
-        {/* Bottom Player Info */}
-        <View
-          style={[
-            st.infoCard,
-            st.bottomCard,
-            st.playerCard,
-            bottomIsActive
-              ? {
-                  backgroundColor: bottomCardBg,
-                  borderColor: withAlpha(bottomPlayerColor, 0.42),
-                  borderWidth: 1.2,
-                }
-              : inactiveCardStyle,
-          ]}
-        >
-          <View
-            style={[st.playerPinstripe, { backgroundColor: bottomPlayerColor }]}
-          />
-          <View style={st.infoRow}>
-            <View
-              style={[
-                st.avatarShell,
-                {
-                  backgroundColor: bottomIsActive
-                    ? withAlpha(bottomPlayerColor, 0.34)
-                    : theme.secondaryBg,
-                  borderColor: bottomIsActive
-                    ? bottomPlayerColor
-                    : theme.borderFocus,
-                },
-              ]}
-            >
-              {showPlayerAvatar ? (
-                <ExpoImage
-                  source={{ uri: profile.avatar_url }}
-                  style={st.avatarImage}
-                  contentFit="cover"
-                />
-              ) : (
-                <Ionicons
-                  name="person"
-                  size={24}
-                  color={
-                    bottomIsActive
-                      ? bottomCardColors.textPrimary
-                      : bottomPlayerColor
-                  }
-                />
-              )}
-            </View>
-            <View style={st.infoMid}>
-              <Text
-                style={[
-                  st.infoLabel,
-                  {
-                    color: bottomIsActive
-                      ? bottomCardColors.textSecondary
-                      : theme.textSecondary,
-                  },
-                ]}
-              >
-                {bottomLabel}
-                {cp === bottomPlayerIndex ? " (ACTIVE)" : ""}
-              </Text>
-              <Text
-                style={[
-                  st.infoName,
-                  bottomIsActive && { color: bottomCardColors.textPrimary },
-                ]}
-              >
-                {bottomPlayer.name}
-              </Text>
-              {isTimedLocal ? (
-                <View style={st.infoMeta}>
-                  <Text
-                    style={[
-                      st.infoMetaLabel,
-                      bottomIsActive && {
-                        color: bottomCardColors.textSecondary,
-                      },
-                    ]}
-                  >
-                    TIME LEFT
-                  </Text>
-                  <Text
-                    style={[
-                      st.infoMetaValue,
-                      bottomIsActive && { color: bottomCardColors.textPrimary },
-                    ]}
-                  >
-                    {formatClock(remainingSeconds[bottomPlayerIndex])}
-                  </Text>
-                </View>
-              ) : (
-                <View style={st.infoMeta}>
-                  <Text
-                    style={[
-                      st.infoMetaLabel,
-                      bottomIsActive && {
-                        color: bottomCardColors.textSecondary,
-                      },
-                    ]}
-                  >
-                    LOCAL MATCH
-                  </Text>
-                </View>
-              )}
-            </View>
-            <View style={st.wallsCol}>
-              <Text
-                style={[
-                  st.wallsLabel,
-                  bottomIsActive && { color: bottomCardColors.textSecondary },
-                ]}
-              >
-                WALLS
-              </Text>
-              <WallIcon
-                remaining={bottomPlayer.wallsRemaining}
-                availableColor={cardWallAvailableColor}
-                usedColor={cardWallUsedColor}
-              />
-              <Text
-                style={[
-                  st.wallsCount,
-                  bottomIsActive && { color: bottomCardColors.textPrimary },
-                ]}
-              >
-                {bottomPlayer.wallsRemaining}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {useFaceToFace && (
-          <View
-            style={[
-              st.faceControlsBottom,
-              !bottomSideCanAct && st.sideControlsDisabled,
-            ]}
-          >
-            <View style={[st.modeToggle, st.modeToggleCompact]}>
-              <TouchableOpacity
-                testID="mode-move-btn-bottom"
-                style={[
-                  st.modeHalf,
-                  st.modeHalfCompact,
-                  actionMode === "move" && st.modeHalfActive,
-                  !bottomSideCanAct && st.controlDisabled,
-                ]}
-                onPress={() => {
-                  setActionMode("move");
-                  setSelectedIntersection(null);
-                  setWallPreview(null);
-                }}
-                activeOpacity={0.7}
-                disabled={!bottomSideCanAct}
-              >
-                <Ionicons
-                  name="arrow-up-outline"
-                  size={16}
-                  color={
-                    actionMode === "move" ? theme.accent : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    st.modeText,
-                    actionMode === "move" && st.modeTextActive,
-                  ]}
-                >
-                  MOVE
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID="mode-wall-btn-bottom"
-                style={[
-                  st.modeHalf,
-                  st.modeHalfCompact,
-                  actionMode === "wall" && st.modeHalfActive,
-                  !bottomSideCanAct && st.controlDisabled,
-                ]}
-                onPress={() => setActionMode("wall")}
-                disabled={
-                  !bottomSideCanAct || gameState.players[cp].wallsRemaining <= 0
-                }
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="reorder-three-outline"
-                  size={16}
-                  color={
-                    actionMode === "wall" ? theme.accent : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    st.modeText,
-                    actionMode === "wall" && st.modeTextActive,
-                  ]}
-                >
-                  WALL
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {actionMode === "wall" && (
-              <TouchableOpacity
-                testID="confirm-btn-bottom"
-                style={[
-                  st.confirmBtn,
-                  st.confirmBtnCompact,
-                  (!bottomSideCanAct || !wallPreview) && st.confirmDisabled,
-                ]}
-                onPress={
-                  bottomSideCanAct && wallPreview ? handlePlaceWall : undefined
-                }
-                activeOpacity={0.85}
-                disabled={!bottomSideCanAct}
-              >
-                <Text style={st.confirmText}>CONFIRM ACTION</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* MOVE / WALL Toggle */}
-        {!useFaceToFace && (
-          <View style={st.bottomControlsSingle}>
-            <View style={st.modeToggle}>
-              <TouchableOpacity
-                testID="mode-move-btn"
-                style={[
-                  st.modeHalf,
-                  actionMode === "move" && st.modeHalfActive,
-                ]}
-                onPress={() => {
-                  setActionMode("move");
-                  setSelectedIntersection(null);
-                  setWallPreview(null);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="arrow-up-outline"
-                  size={16}
-                  color={
-                    actionMode === "move" ? theme.accent : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    st.modeText,
-                    actionMode === "move" && st.modeTextActive,
-                  ]}
-                >
-                  MOVE
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID="mode-wall-btn"
-                style={[
-                  st.modeHalf,
-                  actionMode === "wall" && st.modeHalfActive,
-                ]}
-                onPress={() => setActionMode("wall")}
-                disabled={!isHuman || gameState.players[cp].wallsRemaining <= 0}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="reorder-three-outline"
-                  size={16}
-                  color={
-                    actionMode === "wall" ? theme.accent : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    st.modeText,
-                    actionMode === "wall" && st.modeTextActive,
-                  ]}
-                >
-                  WALL
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {actionMode === "wall" && (
-              <TouchableOpacity
-                testID="confirm-btn"
-                style={[st.confirmBtn, !wallPreview && st.confirmDisabled]}
-                onPress={wallPreview ? handlePlaceWall : undefined}
-                activeOpacity={0.85}
-              >
-                <Text style={st.confirmText}>CONFIRM ACTION</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {isPassAndPlay && (
-          <View style={st.layoutSwitchBar}>
-            <TouchableOpacity
-              style={[
-                st.layoutSwitchBtn,
-                localLayoutMode === "flip-turn" && st.layoutSwitchBtnActive,
-              ]}
-              onPress={() => setLocalLayoutMode("flip-turn")}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  st.layoutSwitchText,
-                  localLayoutMode === "flip-turn" && st.layoutSwitchTextActive,
-                ]}
-              >
-                PASS N PLAY
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                st.layoutSwitchBtn,
-                localLayoutMode === "face-to-face" && st.layoutSwitchBtnActive,
-              ]}
-              onPress={() => setLocalLayoutMode("face-to-face")}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  st.layoutSwitchText,
-                  localLayoutMode === "face-to-face" &&
-                    st.layoutSwitchTextActive,
-                ]}
-              >
-                FACE TO FACE
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={[st.logTriggerBtn, st.bottomUtility]}
-          onPress={() => setShowLogPopup(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="list" size={14} color={theme.textPrimary} />
-          <Text style={st.logTriggerText}>MOVE LOG</Text>
-        </TouchableOpacity>
       </View>
-
-      {/* Achievement Toast Queue */}
-      <AchievementToast
-        queue={achievementQueue}
-        onComplete={() => setAchievementQueue([])}
-      />
-
-      {showLogPopup && (
-        <View style={StyleSheet.absoluteFill}>
-          <TouchableOpacity
-            style={st.logBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowLogPopup(false)}
-          />
-          <View style={st.logPopupCard}>
-            <View style={st.logPopupHeader}>
-              <Text style={st.sectionTitle}>LOG _ SEQUENCE</Text>
-              <TouchableOpacity
-                onPress={() => setShowLogPopup(false)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="close" size={18} color={theme.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              style={st.logPopupList}
-              showsVerticalScrollIndicator={false}
-            >
-              {moveLog.map((e, i) => (
-                <View key={i} style={st.logRow}>
-                  <Text style={st.logNum}>
-                    {String(e.num).padStart(2, "0")}
-                  </Text>
-                  <Text style={st.logType}>{e.type}</Text>
-                  <Text style={st.logDetail}>{e.detail}</Text>
-                </View>
-              ))}
-              {moveLog.length === 0 && (
-                <Text style={st.logEmpty}>No moves yet.</Text>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      )}
-
-      {message !== "" && (
-        <View testID="toast-message" style={st.toast}>
-          <Text style={st.toastText}>{message}</Text>
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -1277,298 +1134,265 @@ const createStyles = (
 ) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    main: { flex: 1, paddingHorizontal: 16, paddingBottom: 8 },
-    topNavRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "flex-start",
-      marginTop: 2,
-      marginBottom: 2,
+    screen: { flex: 1 },
+    main: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      paddingTop: 10,
     },
-    backBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+    content: {
+      flex: 1,
+      justifyContent: "space-between",
+      gap: 16,
+    },
+    cardStackTop: { flexShrink: 0 },
+    cardStackBottom: { flexShrink: 0 },
+    boardWrap: {
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "transparent",
-      borderWidth: 0,
-    },
-    topCard: {
-      flexShrink: 0,
-      marginTop: 8,
-      marginBottom: -6,
-      transform: [{ translateY: 14 }],
+      flex: 1,
+      marginVertical: 12,
     },
     boardSection: {
       flex: 1,
       justifyContent: "center",
-      marginTop: 0,
-      marginBottom: 0,
     },
-    boardWrap: { alignItems: "center" },
-    boardWrapFlipped: { transform: [{ rotate: "180deg" }] },
-    topSideInverted: { transform: [{ rotate: "180deg" }] },
-    bottomCard: {
-      flexShrink: 0,
-      marginTop: -6,
-      transform: [{ translateY: -16 }],
-    },
-    faceControlsTop: { flexShrink: 0, marginTop: 2 },
-    faceControlsBottom: { flexShrink: 0, marginTop: 2 },
-    bottomControlsSingle: { flexShrink: 0, marginTop: -8 },
-    bottomUtility: { flexShrink: 0 },
-    layoutSwitchBar: {
-      flexDirection: "row",
-      backgroundColor: theme.elevated,
-      borderRadius: 10,
-      padding: 4,
-      marginTop: 8,
-      shadowColor: darkMode ? "#FFFFFF" : "#000000",
-      shadowOpacity: darkMode ? 0.12 : 0.16,
-      shadowRadius: 7,
-      shadowOffset: { width: 0, height: 3 },
-      elevation: 4,
-    },
-    layoutSwitchBtn: {
-      flex: 1,
-      borderRadius: 8,
-      paddingVertical: 10,
-      alignItems: "center",
-      borderWidth: 0,
-      backgroundColor: darkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
-    },
-    layoutSwitchBtnActive: {
-      backgroundColor: "rgba(255,122,0,0.14)",
-      borderWidth: 1.5,
-      borderColor: darkMode ? "rgba(255,152,64,0.9)" : "rgba(233,106,0,0.9)",
-    },
-    layoutSwitchText: {
-      color: theme.textSecondary,
-      fontSize: 11,
-      fontFamily: "Inter_700Bold",
-      fontWeight: "700",
-      letterSpacing: 1.1,
-    },
-    layoutSwitchTextActive: { color: theme.accent },
-    modeToggle: {
-      flexDirection: "row",
-      backgroundColor: theme.elevated,
-      borderRadius: 10,
-      marginTop: 4,
-      padding: 2,
-      gap: 2,
-    },
-    modeToggleCompact: { marginTop: 4 },
-    modeHalf: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      paddingVertical: 8,
+    cardMirrored: { transform: [{ rotate: "180deg" }] },
+    playerCard: {
+      borderRadius: 18,
+      overflow: "hidden",
+      backgroundColor: theme.surfaceElevated,
       borderWidth: 1,
-      borderColor: "transparent",
-      borderRadius: 8,
+      borderColor: theme.border,
+      shadowColor: darkMode ? "#000000" : "#111111",
+      shadowOpacity: 0.2,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 5,
     },
-    modeHalfCompact: { paddingVertical: 6 },
-    modeHalfActive: {
-      backgroundColor: "rgba(255,122,0,0.13)",
-      borderColor: darkMode ? "rgba(255,152,64,0.65)" : "rgba(233,106,0,0.58)",
+    basicCard: { minHeight: 84 },
+    basicCardActive: {
+      borderColor: darkMode
+        ? "rgba(248, 246, 242, 0.12)"
+        : "rgba(26, 26, 26, 0.10)",
     },
-    modeText: {
-      color: theme.textSecondary,
-      fontSize: 13,
-      fontFamily: "Inter_700Bold",
-      fontWeight: "700",
-      letterSpacing: 1,
+    activeCard: { minHeight: 156 },
+    activeCardCurrent: {
+      borderColor: withAlpha(theme.accent, 0.46),
     },
-    modeTextActive: { color: theme.accent },
-    confirmBtn: {
-      backgroundColor: theme.accent,
-      borderRadius: 12,
-      paddingVertical: 11,
-      alignItems: "center",
-      marginTop: 6,
+    cardGlowWrap: {
+      padding: 1,
+      borderRadius: 19,
+      backgroundColor: withAlpha(theme.accent, 0.24),
+      shadowColor: theme.accent,
+      shadowOpacity: 0.24,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 0,
     },
-    confirmBtnCompact: { marginTop: 4, paddingVertical: 8 },
-    confirmDisabled: { opacity: 0.5 },
-    sideControlsDisabled: { opacity: 0.55 },
-    controlDisabled: { opacity: 0.8 },
-    confirmText: {
-      color: theme.background,
-      fontSize: 14,
-      fontFamily: "Inter_800ExtraBold",
-      fontWeight: "800",
-      letterSpacing: 1,
-    },
-    infoCard: {
-      backgroundColor: theme.elevated,
-      borderRadius: 14,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      marginTop: 0,
-    },
-    playerCard: { position: "relative", overflow: "hidden" },
-    playerPinstripe: {
+    cardStripe: {
       position: "absolute",
       left: 0,
       top: 0,
       bottom: 0,
-      width: 2.5,
-      backgroundColor: theme.accent,
+      width: 2,
+      zIndex: 2,
     },
-    infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+    cardBody: {
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      gap: 8,
+    },
+    cardHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    cardIdentity: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      flex: 1,
+    },
     avatarShell: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       overflow: "hidden",
+      borderWidth: 2,
       alignItems: "center",
       justifyContent: "center",
-      borderWidth: 2,
+      backgroundColor: theme.secondaryBg,
     },
-    avatarImage: { width: "100%", height: "100%", borderRadius: 20 },
-    infoMid: { flex: 1 },
-    infoLabel: {
-      color: theme.textSecondary,
+    avatarImage: { width: "100%", height: "100%", borderRadius: 18 },
+    cardNameBlock: { flex: 1 },
+    cardLabel: {
       fontSize: 8,
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
-      letterSpacing: 1.2,
+      letterSpacing: 1.4,
+      textTransform: "uppercase",
     },
-    infoName: {
+    cardName: {
       color: theme.textPrimary,
       fontSize: 15,
       fontFamily: "Inter_800ExtraBold",
       fontWeight: "800",
       marginTop: 1,
     },
-    infoMeta: { flexDirection: "row", gap: 8, marginTop: 3 },
-    infoMetaLabel: {
-      color: theme.textSecondary,
-      fontSize: 9,
-      fontFamily: "Inter_700Bold",
-      fontWeight: "700",
-      letterSpacing: 1,
-    },
-    infoMetaValue: {
-      color: theme.textPrimary,
-      fontSize: 13,
-      fontFamily: "Inter_700Bold",
-      fontWeight: "700",
-      marginTop: 0,
-    },
-    infoMetaRow: { flexDirection: "row", gap: 14, marginTop: 4 },
-    wallsCol: { alignItems: "flex-end", gap: 4 },
-    wallsLabel: {
-      color: theme.textSecondary,
-      fontSize: 9,
-      fontFamily: "Inter_700Bold",
-      fontWeight: "700",
-      letterSpacing: 1,
-    },
-    wallsCount: {
-      color: theme.textPrimary,
-      fontSize: 12,
-      fontFamily: "Inter_700Bold",
-      fontWeight: "700",
-    },
-    logTriggerBtn: {
-      marginTop: 6,
-      alignSelf: "flex-end",
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: theme.elevated,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 10,
-    },
-    logTriggerText: {
-      color: theme.textPrimary,
-      fontSize: 11,
-      fontFamily: "Inter_700Bold",
-      fontWeight: "700",
-      letterSpacing: 0.8,
-    },
-    logBackdrop: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.45)",
-    },
-    logPopupCard: {
-      position: "absolute",
-      left: 14,
-      right: 14,
-      top: "16%",
-      bottom: "16%",
-      backgroundColor: theme.elevated,
-      borderRadius: 14,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+    cardStatusPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: theme.secondaryBg,
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.08)",
+      borderColor: theme.border,
     },
-    logPopupHeader: {
+    cardStatusText: {
+      fontSize: 9,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 1.1,
+      textTransform: "uppercase",
+    },
+    cardFooterRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      marginBottom: 8,
+      gap: 10,
     },
-    logPopupList: { flex: 1 },
-    sectionTitle: {
+    cardMetaLabel: {
+      color: theme.textSecondary,
+      fontSize: 9,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 1,
+    },
+    cardMetaValue: {
+      color: theme.textPrimary,
+      fontSize: 12,
+      fontFamily: "Inter_800ExtraBold",
+      fontWeight: "800",
+      marginTop: 1,
+    },
+    turnBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+    },
+    turnBadgeActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    turnBadgeIdle: {
+      backgroundColor: theme.secondaryBg,
+      borderColor: theme.border,
+    },
+    turnBadgeText: {
+      fontSize: 9,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 1.1,
+      textTransform: "uppercase",
+    },
+    actionBarWrap: {
+      gap: 6,
+    },
+    actionToggleBar: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    actionToggle: {
+      flex: 1,
+      minHeight: 34,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      borderRadius: 12,
+      backgroundColor: theme.secondaryBg,
+      borderWidth: 1,
+      borderColor: theme.border,
+      paddingHorizontal: 10,
+    },
+    actionToggleActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    actionToggleDisabled: { opacity: 0.5 },
+    actionToggleText: {
       color: theme.textSecondary,
       fontSize: 10,
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
-      letterSpacing: 2.5,
-      marginBottom: 10,
+      letterSpacing: 0.8,
     },
-    logRow: {
-      flexDirection: "row",
+    actionToggleTextActive: { color: theme.textPrimary },
+    confirmButton: {
+      backgroundColor: theme.accent,
+      borderRadius: 12,
+      paddingVertical: 8,
       alignItems: "center",
-      paddingVertical: 6,
-      gap: 12,
+      borderWidth: 1,
+      borderColor: theme.accent,
     },
-    logNum: {
+    confirmDisabled: { opacity: 1 },
+    confirmButtonText: {
+      color: theme.background,
+      fontSize: 12,
+      fontFamily: "Inter_800ExtraBold",
+      fontWeight: "800",
+      letterSpacing: 0.9,
+    },
+    layoutSwitchBar: {
+      flexDirection: "row",
+      backgroundColor: theme.elevated,
+      borderRadius: 14,
+      padding: 4,
+      gap: 4,
+    },
+    layoutSwitchBtn: {
+      flex: 1,
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: "center",
+      backgroundColor: theme.secondaryBg,
+    },
+    layoutSwitchBtnActive: {
+      backgroundColor: withAlpha(theme.accent, 0.14),
+      borderWidth: 1,
+      borderColor: withAlpha(theme.accent, 0.42),
+    },
+    layoutSwitchText: {
       color: theme.textSecondary,
+      fontSize: 11,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 1,
+    },
+    layoutSwitchTextActive: { color: theme.accent },
+    toast: {
+      position: "absolute",
+      left: 20,
+      right: 20,
+      bottom: 18,
+      alignItems: "center",
+      zIndex: 30,
+    },
+    toastText: {
+      color: theme.textPrimary,
       fontSize: 12,
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
-      width: 24,
-    },
-    logType: {
-      color: theme.textPrimary,
-      fontSize: 13,
-      fontFamily: "Inter_600SemiBold",
-      fontWeight: "600",
-      flex: 1,
-    },
-    logDetail: {
-      color: theme.textSecondary,
-      fontSize: 13,
-      fontFamily: "Inter_400Regular",
-    },
-    logEmpty: {
-      color: theme.textSecondary,
-      fontSize: 12,
-      fontFamily: "Inter_400Regular",
-      fontStyle: "italic",
-    },
-    toast: {
-      position: "absolute",
-      bottom: 100,
-      alignSelf: "center",
       backgroundColor: theme.elevated,
-      paddingHorizontal: 20,
+      paddingHorizontal: 16,
       paddingVertical: 10,
-      borderRadius: 10,
-      zIndex: 200,
-    },
-    toastText: {
-      color: theme.error,
-      fontSize: 13,
-      fontFamily: "Inter_600SemiBold",
-      fontWeight: "600",
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.border,
+      overflow: "hidden",
     },
   });

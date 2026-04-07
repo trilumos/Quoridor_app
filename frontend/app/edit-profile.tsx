@@ -13,7 +13,7 @@ import {
   Alert,
   Modal,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
@@ -21,21 +21,29 @@ import * as ImagePicker from "expo-image-picker";
 import { getThemeColors } from "../src/theme/colors";
 import { useAuthStore } from "../src/store/authStore";
 import { useGameContext } from "../src/storage/GameContext";
+import { StorageService } from "../src/storage/StorageService";
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const isFirstRun = params.firstRun === "true";
   const { settings } = useGameContext();
   const { profile, updateUsername, updateAvatar } = useAuthStore();
-  const [displayName, setDisplayName] = useState(profile?.username || "");
+  const [displayName, setDisplayName] = useState(isFirstRun ? "" : profile?.username || "");
   const [saved, setSaved] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [showAvatarViewer, setShowAvatarViewer] = useState(false);
   const theme = getThemeColors(settings.darkMode);
   const st = useMemo(() => createStyles(theme), [theme]);
+  const hasName = displayName.trim().length > 0;
 
   useEffect(() => {
+    if (isFirstRun) {
+      setDisplayName((current) => current || "");
+      return;
+    }
     setDisplayName(profile?.username || "");
-  }, [profile?.username]);
+  }, [isFirstRun, profile?.username]);
 
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -66,7 +74,13 @@ export default function EditProfileScreen() {
     Keyboard.dismiss();
     const nextUsername = displayName.trim().toUpperCase();
     if (!nextUsername) return;
-    await updateUsername(nextUsername);
+    const ok = await updateUsername(nextUsername);
+    if (!ok) return;
+    if (isFirstRun) {
+      await StorageService.set(StorageService.KEYS.USERNAME_PROMPT_SEEN, true);
+      router.replace("/(tabs)" as never);
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -78,84 +92,172 @@ export default function EditProfileScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
-          contentContainerStyle={st.scrollContent}
+          contentContainerStyle={[
+            st.scrollContent,
+            isFirstRun && st.scrollContentCentered,
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={st.inner}>
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={st.backBtn}
-                activeOpacity={0.6}
-              >
-                <Ionicons
-                  name="arrow-back"
-                  size={22}
-                  color={theme.spaceTextSecondary}
-                />
-              </TouchableOpacity>
+              {isFirstRun ? (
+                <View style={st.firstRunWrap}>
+                  <View style={st.firstRunCard}>
+                    <Text style={st.firstRunEyebrow}>WELCOME</Text>
+                    <Text style={st.firstRunTitle}>CREATE YOUR PLAYER PROFILE</Text>
+                    <Text style={st.firstRunSubtitle}>
+                      Choose your name and profile photo. This identity is used across the app.
+                    </Text>
 
-              <Text style={st.label}>IDENTITY</Text>
-              <Text style={st.heading}>EDIT PROFILE</Text>
+                    <View style={st.avatarArea}>
+                      <TouchableOpacity
+                        style={[st.avatarCircle, st.avatarCircleLarge]}
+                        activeOpacity={0.85}
+                        onPress={() => setShowAvatarViewer(true)}
+                      >
+                        {profile?.avatar_url ? (
+                          <ExpoImage
+                            source={{ uri: profile.avatar_url }}
+                            style={st.avatarImageLarge}
+                            contentFit="cover"
+                          />
+                        ) : (
+                          <Ionicons
+                            name="person"
+                            size={48}
+                            color={theme.textSecondary}
+                          />
+                        )}
+                      </TouchableOpacity>
 
-              {/* Avatar */}
-              <View style={st.avatarArea}>
-                <TouchableOpacity
-                  style={st.avatarCircle}
-                  activeOpacity={0.85}
-                  onPress={() => setShowAvatarViewer(true)}
-                >
-                  {profile?.avatar_url ? (
-                    <ExpoImage
-                      source={{ uri: profile.avatar_url }}
-                      style={st.avatarImage}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <Ionicons
-                      name="person"
-                      size={36}
-                      color={theme.textSecondary}
-                    />
-                  )}
-                </TouchableOpacity>
-              </View>
+                      <TouchableOpacity
+                        style={st.addPhotoBtn}
+                        activeOpacity={0.85}
+                        onPress={handlePickAvatar}
+                      >
+                        <Ionicons
+                          name="image-outline"
+                          size={15}
+                          color={theme.background}
+                        />
+                        <Text style={st.addPhotoBtnText}>
+                          {profile?.avatar_url ? "CHANGE PROFILE PICTURE" : "ADD PROFILE PICTURE"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
 
-              <View style={st.inputGroup}>
-                <View
-                  style={[
-                    st.inputWrap,
-                    focusedField === "name" && st.inputFocused,
-                  ]}
-                >
-                  {focusedField === "name" && <View style={st.pinstripe} />}
-                  <Text style={st.inputLabel}>DISPLAY NAME</Text>
-                  <TextInput
-                    style={st.input}
-                    value={displayName}
-                    onChangeText={setDisplayName}
-                    placeholder="Your display name"
-                    placeholderTextColor={theme.textSecondary}
-                    autoCapitalize="characters"
-                    onFocus={() => setFocusedField("name")}
-                    onBlur={() => setFocusedField(null)}
-                    returnKeyType="done"
-                    onSubmitEditing={handleSave}
-                    maxLength={20}
-                  />
+                    <View style={st.inputGroup}>
+                      <View
+                        style={[
+                          st.inputWrap,
+                          focusedField === "name" && st.inputFocused,
+                        ]}
+                      >
+                        {focusedField === "name" && <View style={st.pinstripe} />}
+                        <Text style={st.inputLabel}>DISPLAY NAME</Text>
+                        <TextInput
+                          style={st.input}
+                          value={displayName}
+                          onChangeText={setDisplayName}
+                          placeholder="Enter your username"
+                          placeholderTextColor={theme.textSecondary}
+                          autoCapitalize="characters"
+                          autoFocus
+                          onFocus={() => setFocusedField("name")}
+                          onBlur={() => setFocusedField(null)}
+                          returnKeyType="done"
+                          onSubmitEditing={handleSave}
+                          maxLength={20}
+                        />
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[st.saveBtn, !hasName && st.saveBtnDisabled]}
+                      onPress={handleSave}
+                      activeOpacity={0.85}
+                      disabled={!hasName}
+                    >
+                      <Text style={st.saveBtnText}>SAVE & CONTINUE</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    onPress={() => router.back()}
+                    style={st.backBtn}
+                    activeOpacity={0.6}
+                  >
+                    <Ionicons
+                      name="arrow-back"
+                      size={22}
+                      color={theme.spaceTextSecondary}
+                    />
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={st.saveBtn}
-                onPress={handleSave}
-                activeOpacity={0.85}
-              >
-                <Text style={st.saveBtnText}>
-                  {saved ? "SAVED!" : "SAVE CHANGES"}
-                </Text>
-              </TouchableOpacity>
+                  <Text style={st.label}>IDENTITY</Text>
+                  <Text style={st.heading}>EDIT PROFILE</Text>
+
+                  <View style={st.avatarArea}>
+                    <TouchableOpacity
+                      style={st.avatarCircle}
+                      activeOpacity={0.85}
+                      onPress={() => setShowAvatarViewer(true)}
+                    >
+                      {profile?.avatar_url ? (
+                        <ExpoImage
+                          source={{ uri: profile.avatar_url }}
+                          style={st.avatarImage}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <Ionicons
+                          name="person"
+                          size={36}
+                          color={theme.textSecondary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={st.inputGroup}>
+                    <View
+                      style={[
+                        st.inputWrap,
+                        focusedField === "name" && st.inputFocused,
+                      ]}
+                    >
+                      {focusedField === "name" && <View style={st.pinstripe} />}
+                      <Text style={st.inputLabel}>DISPLAY NAME</Text>
+                      <TextInput
+                        style={st.input}
+                        value={displayName}
+                        onChangeText={setDisplayName}
+                        placeholder="Your display name"
+                        placeholderTextColor={theme.textSecondary}
+                        autoCapitalize="characters"
+                        onFocus={() => setFocusedField("name")}
+                        onBlur={() => setFocusedField(null)}
+                        returnKeyType="done"
+                        onSubmitEditing={handleSave}
+                        maxLength={20}
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={st.saveBtn}
+                    onPress={handleSave}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={st.saveBtnText}>
+                      {saved ? "SAVED!" : "SAVE CHANGES"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </TouchableWithoutFeedback>
         </ScrollView>
@@ -220,7 +322,46 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     container: { flex: 1, backgroundColor: theme.background },
     flex: { flex: 1 },
     scrollContent: { flexGrow: 1 },
+    scrollContentCentered: { justifyContent: "center" },
     inner: { flex: 1, paddingHorizontal: 24 },
+    firstRunWrap: {
+      flex: 1,
+      justifyContent: "center",
+      paddingVertical: 28,
+    },
+    firstRunCard: {
+      backgroundColor: theme.elevated,
+      borderRadius: 24,
+      paddingHorizontal: 20,
+      paddingVertical: 24,
+      borderWidth: 1,
+      borderColor: "rgba(233, 106, 0, 0.34)",
+    },
+    firstRunEyebrow: {
+      color: theme.accent,
+      fontSize: 11,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 2,
+      textAlign: "center",
+    },
+    firstRunTitle: {
+      color: theme.spaceTextPrimary,
+      fontSize: 23,
+      fontFamily: "Inter_800ExtraBold",
+      fontWeight: "800",
+      textAlign: "center",
+      marginTop: 8,
+    },
+    firstRunSubtitle: {
+      color: theme.textSecondary,
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      textAlign: "center",
+      marginTop: 10,
+      marginBottom: 18,
+      lineHeight: 20,
+    },
     backBtn: { width: 44, height: 44, justifyContent: "center", marginTop: 8 },
     label: {
       color: theme.accent,
@@ -251,6 +392,31 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       overflow: "hidden",
     },
     avatarImage: { width: 74, height: 74, borderRadius: 37 },
+    avatarCircleLarge: {
+      width: 102,
+      height: 102,
+      borderRadius: 51,
+    },
+    avatarImageLarge: { width: 96, height: 96, borderRadius: 48 },
+    addPhotoBtn: {
+      marginTop: 12,
+      backgroundColor: theme.accent,
+      borderRadius: 12,
+      paddingVertical: 11,
+      paddingHorizontal: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      minWidth: 210,
+    },
+    addPhotoBtnText: {
+      color: theme.background,
+      fontSize: 11,
+      fontFamily: "Inter_800ExtraBold",
+      fontWeight: "800",
+      letterSpacing: 0.9,
+    },
     inputGroup: { gap: 12 },
     inputWrap: {
       backgroundColor: theme.elevated,
@@ -291,6 +457,9 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       paddingVertical: 18,
       alignItems: "center",
       marginTop: 32,
+    },
+    saveBtnDisabled: {
+      opacity: 0.45,
     },
     saveBtnText: {
       color: theme.background,

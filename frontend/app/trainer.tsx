@@ -190,10 +190,19 @@ export default function TrainerScreen() {
 
     const { type, boardSize, description } = item.visual;
 
+    type LessonCellType =
+      | "empty"
+      | "pawn1"
+      | "pawn2"
+      | "goal"
+      | "highlight"
+      | "blocked";
+    type LessonCell = { type: LessonCellType };
+
     // Helper to create empty 9x9 board
-    const emptyBoard = () =>
+    const emptyBoard = (): LessonCell[][] =>
       Array.from({ length: 9 }, () =>
-        Array.from({ length: 9 }, () => ({ type: "empty" as const })),
+        Array.from({ length: 9 }, (): LessonCell => ({ type: "empty" })),
       );
 
     switch (type) {

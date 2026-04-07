@@ -60,7 +60,7 @@ export default function PregameAI() {
       mode: "ai",
       difficulty,
       resume: resume ? "true" : "false",
-      p1Name: profile?.username || "ARCHITECT_X",
+      p1Name: profile?.username || "PLAYER",
       p2Name:
         difficulty === "easy"
           ? "Novice AI"

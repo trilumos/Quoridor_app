@@ -203,7 +203,7 @@ export const AuthService = {
 
   createDemoSession(
     email = DEFAULT_EMAIL,
-    displayName = "ARCHITECT_X",
+    displayName = "",
   ): Session {
     const id = makeRandomLocalId("demo");
     const syntheticEmail =

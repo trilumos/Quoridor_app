@@ -42,7 +42,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={st.container}>
+    <SafeAreaView edges={["top", "left", "right"]} style={st.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={st.scroll}
@@ -55,7 +55,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={st.settingsRow}
             activeOpacity={0.6}
-            onPress={() => router.push("/me" as never)}
+            onPress={() => router.push("/(tabs)/me" as never)}
           >
             <View style={st.avatarCircle}>
               {profile?.avatar_url ? (
