@@ -11,11 +11,13 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getThemeColors } from "../src/theme/colors";
 import { useGameContext } from "../src/storage/GameContext";
+import { useAuthStore } from "../src/store/authStore";
 
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { isPremium, setPremium, settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const { setPremiumStatus } = useAuthStore();
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
 
   return (
@@ -44,7 +46,7 @@ export default function SubscriptionScreen() {
             <View style={st.activePinstripe} />
             <View style={st.activeHeader}>
               <Ionicons name="diamond" size={24} color={theme.accent} />
-              <Text style={st.activeTitle}>GRANDMASTER PASS</Text>
+              <Text style={st.activeTitle}>AD-FREE PASS</Text>
             </View>
             <Text style={st.activeStatus}>Active</Text>
             <View style={st.activePlanRow}>
@@ -58,27 +60,22 @@ export default function SubscriptionScreen() {
 
             <View style={st.features}>
               <Text style={st.featuresTitle}>INCLUDED</Text>
-              {[
-                "Grandmaster AI Difficulty",
-                "All Board Themes",
-                "Ad-free Experience",
-                "Deep Game Analysis",
-                "Priority Support",
-              ].map((f, i) => (
-                <View key={i} style={st.featureRow}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={16}
-                    color={theme.success}
-                  />
-                  <Text style={st.featureText}>{f}</Text>
-                </View>
-              ))}
+              <View style={st.featureRow}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color={theme.success}
+                />
+                <Text style={st.featureText}>No ads anywhere in the app</Text>
+              </View>
             </View>
 
             <TouchableOpacity
               style={st.cancelBtn}
-              onPress={() => setPremium(false)}
+              onPress={async () => {
+                await setPremiumStatus(false);
+                setPremium(false);
+              }}
               activeOpacity={0.7}
             >
               <Text style={st.cancelBtnText}>CANCEL SUBSCRIPTION</Text>
@@ -93,16 +90,16 @@ export default function SubscriptionScreen() {
                 color={theme.textSecondary}
               />
             </View>
-            <Text style={st.inactiveTitle}>NO ACTIVE SUBSCRIPTION</Text>
+            <Text style={st.inactiveTitle}>NO AD-FREE PLAN ACTIVE</Text>
             <Text style={st.inactiveDesc}>
-              Upgrade to Premium to unlock all features.
+              Upgrade to remove ads from the whole app.
             </Text>
             <TouchableOpacity
               style={st.upgradeBtn}
               onPress={() => router.push("/paywall" as never)}
               activeOpacity={0.85}
             >
-              <Text style={st.upgradeBtnText}>VIEW PLANS</Text>
+              <Text style={st.upgradeBtnText}>REMOVE ADS</Text>
             </TouchableOpacity>
           </View>
         )}

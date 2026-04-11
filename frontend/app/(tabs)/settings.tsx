@@ -21,7 +21,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { settings, updateSettings } = useGameContext();
   const { profile } = useAuthStore();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = createStyles(theme);
 
   const handleSoundToggle = (v: boolean) => {
@@ -119,7 +119,7 @@ export default function SettingsScreen() {
               value={settings.soundEnabled}
               onValueChange={handleSoundToggle}
               trackColor={{
-                false: "rgba(255,255,255,0.08)",
+                false: theme.secondaryBg,
                 true: theme.accent,
               }}
               thumbColor={
@@ -144,7 +144,7 @@ export default function SettingsScreen() {
               value={settings.hapticsEnabled}
               onValueChange={handleHapticsToggle}
               trackColor={{
-                false: "rgba(255,255,255,0.08)",
+                false: theme.secondaryBg,
                 true: theme.accent,
               }}
               thumbColor={
@@ -169,7 +169,7 @@ export default function SettingsScreen() {
               value={!settings.darkMode}
               onValueChange={handleThemeToggle}
               trackColor={{
-                false: "rgba(255,255,255,0.08)",
+                false: theme.secondaryBg,
                 true: theme.accent,
               }}
               thumbColor={
@@ -268,7 +268,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1.5,
-      borderColor: "rgba(233, 106, 0, 0.55)",
+      borderColor: theme.borderFocus,
       overflow: "hidden",
     },
     avatarImage: { width: 42, height: 42, borderRadius: 21 },

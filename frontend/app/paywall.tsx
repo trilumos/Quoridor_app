@@ -15,28 +15,18 @@ import { useGameContext } from "../src/storage/GameContext";
 
 const FEATURES = [
   {
-    icon: "hardware-chip-outline",
-    label: "Grandmaster AI",
-    desc: "The ultimate strategic challenge.",
-  },
-  {
-    icon: "color-palette-outline",
-    label: "All Themes",
-    desc: "Exclusive board skins and materials.",
-  },
-  {
     icon: "ban-outline",
     label: "Ad-free",
-    desc: "Zero interruptions. Pure strategy.",
+    desc: "Remove ads from the entire app.",
   },
 ];
 
 export default function PaywallScreen() {
   const router = useRouter();
-  const { activatePremium, isPremium } = useAuthStore();
+  const { activatePremium, setPremiumStatus } = useAuthStore();
   const { setPremium } = useGameContext();
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
   const pressedRef = useRef(false);
   const [success, setSuccess] = useState(false);
@@ -44,25 +34,30 @@ export default function PaywallScreen() {
   const handlePurchase = async (tier: "monthly" | "annual") => {
     if (pressedRef.current) return;
     pressedRef.current = true;
-    await activatePremium(tier);
-    setPremium(true);
-    setSuccess(true);
-    setTimeout(() => {
-      pressedRef.current = false;
-      router.back();
-    }, 800);
+    const ok = await activatePremium(tier);
+    if (ok) {
+      await setPremiumStatus(true);
+      setPremium(true);
+      setSuccess(true);
+      setTimeout(() => {
+        pressedRef.current = false;
+        router.back();
+      }, 800);
+      return;
+    }
+    pressedRef.current = false;
   };
 
-  if (success || isPremium) {
+  if (success) {
     return (
       <SafeAreaView style={st.container}>
         <View style={st.successArea}>
           <View style={st.successIcon}>
             <Ionicons name="checkmark-circle" size={56} color={theme.success} />
           </View>
-          <Text style={st.successTitle}>WELCOME TO{`\n`}GRANDMASTER</Text>
+          <Text style={st.successTitle}>ADS REMOVED</Text>
           <Text style={st.successSub}>
-            All premium features are now unlocked.
+            You will no longer see ads anywhere in the app.
           </Text>
           <TouchableOpacity
             style={st.successBtn}
@@ -93,13 +88,12 @@ export default function PaywallScreen() {
         </View>
 
         <View style={st.badge}>
-          <Text style={st.badgeText}>ELITE MEMBERSHIP</Text>
+          <Text style={st.badgeText}>AD REMOVAL</Text>
         </View>
 
-        <Text style={st.title}>GRANDMASTER{`\n`}PASS</Text>
+        <Text style={st.title}>REMOVE ADS</Text>
         <Text style={st.subtitle}>
-          Unlock the full strategic arsenal. Advanced AI, exclusive board skins,
-          deep game analysis, and an ad-free command center.
+          Keep every feature and remove ads from the whole app.
         </Text>
 
         <View style={st.features}>
@@ -118,7 +112,7 @@ export default function PaywallScreen() {
           <View style={st.bestValueBadge}>
             <Text style={st.bestValueText}>BEST VALUE</Text>
           </View>
-          <Text style={st.planTitle}>ANNUAL PASS</Text>
+          <Text style={st.planTitle}>ANNUAL AD-FREE PASS</Text>
           <View style={st.priceRow}>
             <Text style={st.priceMain}>$49.99</Text>
             <Text style={st.pricePer}>/year</Text>
@@ -136,7 +130,7 @@ export default function PaywallScreen() {
         </View>
 
         <View style={st.planCard}>
-          <Text style={st.planTitle}>MONTHLY PASS</Text>
+          <Text style={st.planTitle}>MONTHLY AD-FREE PASS</Text>
           <View style={st.priceRow}>
             <Text style={st.priceMain}>$6.99</Text>
             <Text style={st.pricePer}>/month</Text>
@@ -365,7 +359,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       width: 100,
       height: 100,
       borderRadius: 50,
-      backgroundColor: "rgba(34,197,94,0.1)",
+      backgroundColor: theme.successAlpha12,
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 24,

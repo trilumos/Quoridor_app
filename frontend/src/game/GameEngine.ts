@@ -257,6 +257,10 @@ export function checkWin(state: GameState): number | null {
 
 export function applyMove(state: GameState, to: Position): GameState {
   const cp = state.currentPlayer;
+  const opponent = cp === 0 ? state.players[1].position : state.players[0].position;
+  if (to.row === opponent.row && to.col === opponent.col) {
+    return state;
+  }
   const newPlayers: [PlayerState, PlayerState] = [
     cp === 0 ? { ...state.players[0], position: to } : { ...state.players[0] },
     cp === 1 ? { ...state.players[1], position: to } : { ...state.players[1] },

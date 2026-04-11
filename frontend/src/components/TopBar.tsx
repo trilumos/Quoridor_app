@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getThemeColors } from "../theme/colors";
 import { useGameContext } from "../storage/GameContext";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface Props {
   title?: string;
@@ -22,7 +23,8 @@ export default function TopBar({
   rightElement,
 }: Props) {
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
+  const isGradientTheme = theme.themeType === "gradient";
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
@@ -42,17 +44,44 @@ export default function TopBar({
         </TouchableOpacity>
       ) : (
         <View style={styles.gridIcon}>
-          <View style={styles.gridRow}>
-            <View style={styles.gridCell} />
-            <View style={styles.gridCell} />
-          </View>
-          <View style={styles.gridRow}>
-            <View style={styles.gridCell} />
-            <View style={styles.gridCell} />
-          </View>
+          {isGradientTheme ? (
+            <LinearGradient
+              colors={[theme.highlightGradientStart, theme.highlightGradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gridGradient}
+            >
+              <View style={styles.gridRow}>
+                <View style={styles.gridCell} />
+                <View style={styles.gridCell} />
+              </View>
+              <View style={styles.gridRow}>
+                <View style={styles.gridCell} />
+                <View style={styles.gridCell} />
+              </View>
+            </LinearGradient>
+          ) : (
+            <View style={[styles.gridGradient, styles.gridSolid]}>
+              <View style={styles.gridRow}>
+                <View style={styles.gridCell} />
+                <View style={styles.gridCell} />
+              </View>
+              <View style={styles.gridRow}>
+                <View style={styles.gridCell} />
+                <View style={styles.gridCell} />
+              </View>
+            </View>
+          )}
         </View>
       )}
-      <Text style={styles.title}>{title}</Text>
+      <Text
+        style={styles.title}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      >
+        {title}
+      </Text>
       {rightElement ? (
         rightElement
       ) : showSettings ? (
@@ -69,7 +98,7 @@ export default function TopBar({
           />
         </TouchableOpacity>
       ) : (
-        <View style={{ width: 32 }} />
+        <View style={styles.iconSpacer} />
       )}
     </View>
   );
@@ -84,6 +113,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       paddingHorizontal: 16,
       paddingVertical: 12,
       backgroundColor: theme.background,
+      gap: 8,
     },
     iconBtn: {
       width: 32,
@@ -94,9 +124,19 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     gridIcon: {
       width: 32,
       height: 32,
+      borderRadius: 8,
+      overflow: "hidden",
+      flexShrink: 0,
+    },
+    gridGradient: {
+      width: "100%",
+      height: "100%",
       alignItems: "center",
       justifyContent: "center",
       gap: 3,
+    },
+    gridSolid: {
+      backgroundColor: theme.secondaryBg,
     },
     gridRow: {
       flexDirection: "row",
@@ -106,12 +146,16 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       width: 8,
       height: 8,
       borderRadius: 2,
-      backgroundColor: theme.accent,
+      backgroundColor: theme.surface,
     },
     title: {
+      flex: 1,
+      minWidth: 0,
       color: theme.spaceTextPrimary,
       fontSize: 16,
       fontWeight: "800",
       letterSpacing: 3,
+      textAlign: "center",
     },
+    iconSpacer: { width: 32, height: 32, flexShrink: 0 },
   });

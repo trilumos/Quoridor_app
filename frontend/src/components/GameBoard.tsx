@@ -19,6 +19,7 @@ interface GameBoardProps {
   onCellPress: (row: number, col: number) => void;
   onIntersectionPress: (row: number, col: number) => void;
   boardSize: number;
+  flipped?: boolean;
 }
 
 const WALL_THICKNESS = 5;
@@ -88,12 +89,11 @@ export default React.memo(function GameBoard({
   onCellPress,
   onIntersectionPress,
   boardSize,
+  flipped = false,
 }: GameBoardProps) {
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
-  const gridLineColor = settings.darkMode
-    ? "rgba(255, 138, 51, 0.24)"
-    : "rgba(233, 106, 0, 0.28)";
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
+  const gridLineColor = withAlpha(theme.accent, settings.darkMode ? 0.24 : 0.28);
 
   const { cellSize, gapSize, step } = useMemo(() => {
     const gs = Math.max(4, Math.round(boardSize / 55));
@@ -244,7 +244,12 @@ export default React.memo(function GameBoard({
       testID="game-board"
       style={[
         styles.board,
-        { width: boardSize, height: boardSize, backgroundColor: theme.boardBg },
+        {
+          width: boardSize,
+          height: boardSize,
+          backgroundColor: theme.boardBg,
+          transform: flipped ? [{ rotate: "180deg" }] : [],
+        },
       ]}
     >
       {gridLines}

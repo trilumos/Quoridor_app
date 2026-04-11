@@ -9,6 +9,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { getThemeColors } from "../theme/colors";
 import { useGameContext } from "../storage/GameContext";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface TurnToastProps {
   playerName: string;
@@ -24,7 +25,8 @@ export default function TurnToast({
   onDismiss,
 }: TurnToastProps) {
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
+  const isGradientTheme = theme.themeType === "gradient";
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const translateY = useSharedValue(-80);
@@ -59,8 +61,19 @@ export default function TurnToast({
 
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
-      <Animated.View style={styles.pinstripe} />
-      <Text style={styles.text}>{`${playerName.toUpperCase()}'S TURN`}</Text>
+      {isGradientTheme ? (
+        <LinearGradient
+          colors={[theme.highlightGradientStart, theme.highlightGradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.pinstripe}
+        />
+      ) : (
+        <Animated.View style={styles.pinstripe} />
+      )}
+      <Text style={styles.text} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+        {`${playerName.toUpperCase()}'S TURN`}
+      </Text>
     </Animated.View>
   );
 }
@@ -80,6 +93,8 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       paddingHorizontal: 16,
       paddingLeft: 14,
       zIndex: 100,
+      width: "92%",
+      maxWidth: 320,
     },
     pinstripe: {
       position: "absolute",
@@ -95,5 +110,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
       letterSpacing: 1.1,
+      flexShrink: 1,
+      textAlign: "center",
     },
   });

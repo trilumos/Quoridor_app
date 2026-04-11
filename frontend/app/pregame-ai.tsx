@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
+import {
+  ScrollView,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { showInterstitial } from "../src/lib/ads";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { getThemeColors } from "../src/theme/colors";
@@ -38,14 +45,15 @@ const DIFFICULTIES: {
 
 export default function PregameAI() {
   const router = useRouter();
-  const { settings } = useGameContext();
+  useLocalSearchParams();
+  const { settings, isPremium, hasPlayedInLast24Hours } = useGameContext();
   const { profile, user } = useAuthStore();
   const { savedGame, deleteSavedGame } = useGameStore();
   const savedAiGame = savedGame?.mode === "ai" ? savedGame : null;
   const [selected, setSelected] = useState<Difficulty | null>(
     () => (savedAiGame?.difficulty as Difficulty | null) ?? null,
   );
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
 
   useEffect(() => {
@@ -77,12 +85,34 @@ export default function PregameAI() {
     if (savedAiGame && user?.id) {
       await deleteSavedGame(user.id);
     }
-    router.push(buildGameParams(selected) as never);
+
+    const gameParams = buildGameParams(selected);
+
+
+    if (!isPremium && (selected === "hard" || !hasPlayedInLast24Hours())) {
+      showInterstitial(() => {
+        router.push({
+          pathname: "/game",
+          params: {
+            adType: "session_start",
+            ...gameParams.params,
+          },
+        } as never);
+      });
+      return;
+    }
+
+    router.push(gameParams as never);
   };
 
   return (
     <SafeAreaView style={st.container}>
-      <View style={st.screen}>
+      <ScrollView
+        style={st.scroll}
+        contentContainerStyle={st.screen}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={st.configLabel}>GAME CONFIGURATION</Text>
         <Text style={st.pageTitle}>{"Select Strategic\nComplexity"}</Text>
 
@@ -91,43 +121,56 @@ export default function PregameAI() {
           {DIFFICULTIES.map((d) => {
             const isSelected = selected === d.key;
             return (
-              <TouchableOpacity
-                key={d.key}
-                testID={`diff-${d.key}`}
-                style={[st.diffCard, isSelected && st.diffCardSelected]}
-                onPress={() => {
-                  setSelected(d.key);
-                }}
-                activeOpacity={0.7}
-              >
-                {isSelected && <View style={st.pinstripe} />}
-                <View style={st.diffInner}>
-                  <View style={st.diffLeft}>
-                    <View style={st.diffIconWrap}>
-                      <Ionicons
-                        name={d.icon as any}
-                        size={20}
-                        color={isSelected ? theme.accent : theme.textSecondary}
-                      />
-                    </View>
-                    <View style={st.diffText}>
-                      <View style={st.diffTitleRow}>
-                        <Text style={st.diffTitle}>{d.label}</Text>
-                        {d.key === "medium" && (
-                          <View style={st.recoBadge}>
-                            <Text style={st.recoText}>RECOMMENDED</Text>
-                          </View>
-                        )}
+              <View key={d.key}>
+                <TouchableOpacity
+                  testID={`diff-${d.key}`}
+                  style={[
+                    st.diffCard,
+                    isSelected && st.diffCardSelected,
+                  ]}
+                  onPress={() => {
+                    setSelected(d.key);
+                  }}
+                  activeOpacity={0.78}
+                >
+                  {isSelected && <View style={st.pinstripe} />}
+                  <View style={st.diffInner}>
+                    <View style={st.diffLeft}>
+                      <View
+                        style={st.diffIconWrap}
+                      >
+                        <Ionicons
+                          name={d.icon as any}
+                          size={20}
+                          color={
+                            isSelected
+                                ? theme.accent
+                                : theme.textSecondary
+                          }
+                        />
                       </View>
-                      <Text style={st.diffDesc}>{d.desc}</Text>
+                      <View style={st.diffText}>
+                        <View style={st.diffTitleRow}>
+                          <Text
+                            style={st.diffTitle}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.75}
+                          >
+                            {d.label}
+                          </Text>
+                          {d.key === "medium" && (
+                            <View style={st.recoBadge}>
+                              <Text style={st.recoText}>RECOMMENDED</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={st.diffDesc}>{d.desc}</Text>
+                      </View>
                     </View>
                   </View>
-                  {/* Radio button */}
-                  <View style={[st.radio, isSelected && st.radioSelected]}>
-                    {isSelected && <View style={st.radioInner} />}
-                  </View>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
             );
           })}
         </View>
@@ -162,7 +205,7 @@ export default function PregameAI() {
             <Text style={st.continueBtnText}>CONTINUE</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -170,8 +213,9 @@ export default function PregameAI() {
 const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
+    scroll: { flex: 1 },
     screen: {
-      flex: 1,
+      flexGrow: 1,
       paddingHorizontal: 20,
       paddingTop: 12,
       paddingBottom: 32,
@@ -191,6 +235,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontWeight: "800",
       lineHeight: 36,
       marginTop: 8,
+      flexShrink: 1,
     },
     cards: { gap: 10, marginTop: 24 },
     diffCard: {
@@ -222,7 +267,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       width: 40,
       height: 40,
       borderRadius: 10,
-      backgroundColor: "rgba(255,255,255,0.04)",
+      backgroundColor: theme.secondaryBg,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -254,22 +299,6 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontSize: 12,
       fontFamily: "Inter_400Regular",
       marginTop: 3,
-    },
-    radio: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      borderWidth: 2,
-      borderColor: "rgba(255,255,255,0.15)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    radioSelected: { borderColor: theme.accent },
-    radioInner: {
-      width: 12,
-      height: 12,
-      borderRadius: 6,
-      backgroundColor: theme.accent,
     },
     previewCard: {
       backgroundColor: theme.elevated,
@@ -327,7 +356,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     },
     resumeBackdrop: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.72)",
+      backgroundColor: theme.overlayGlass,
       alignItems: "center",
       justifyContent: "center",
       padding: 24,

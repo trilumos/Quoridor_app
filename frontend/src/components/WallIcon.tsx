@@ -13,7 +13,7 @@ export default function WallIcon({
   availableColor,
 }: WallIconProps) {
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const styles = useMemo(() => createStyles(), []);
   const wallCount = Math.max(0, remaining);
   const wallWidth = 3;

@@ -16,7 +16,7 @@ export default function VictoryScreen() {
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const { settings } = useGameContext();
   const { profile } = useAuthStore();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const winner = Number(params.winner || 0);
@@ -29,6 +29,7 @@ export default function VictoryScreen() {
   const timeSec = Number(params.time || 0);
   const mode = (params.mode as string) || "ai";
   const difficulty = (params.difficulty as string) || "";
+  const winMethod = (params.winMethod as string) || "normal";
 
   const winnerName = winner === 0 ? p1Name : p2Name;
   const winnerColor = winner === 0 ? theme.player1 : theme.player2;
@@ -39,7 +40,11 @@ export default function VictoryScreen() {
   const mins = Math.floor(timeSec / 60);
   const secs = timeSec % 60;
   const titleText =
-    mode === "ai" ? "YOU WIN" : `${winnerName.toUpperCase()} WINS`;
+    mode === "ai"
+      ? winMethod === "time"
+        ? "YOU WIN ON TIME"
+        : "YOU WIN"
+      : `${winnerName.toUpperCase()} ${winMethod === "time" ? "WINS ON TIME" : "WINS"}`;
 
   useEffect(() => {
     Animated.parallel([
@@ -84,6 +89,9 @@ export default function VictoryScreen() {
         {/* Winner text */}
         <Text style={styles.winnerName}>{titleText}</Text>
         <Text style={styles.winsLabel}>MATCH COMPLETE</Text>
+        {winMethod === "time" && (
+          <Text style={styles.timeWinLabel}>THE CLOCK REACHED ZERO</Text>
+        )}
 
         {/* Stats */}
         <View style={styles.statsCard}>
@@ -217,6 +225,15 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontWeight: "700",
       letterSpacing: 3,
       marginTop: 4,
+    },
+    timeWinLabel: {
+      color: theme.accent,
+      fontSize: 12,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 1.5,
+      marginTop: 8,
+      textAlign: "center",
     },
     statsCard: {
       backgroundColor: theme.elevated,

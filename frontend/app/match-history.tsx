@@ -167,7 +167,7 @@ export default function MatchHistoryScreen() {
   const { user } = useAuthStore();
   const [matches, setMatches] = useState<MatchHistoryEntry[]>([]);
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
 
   useFocusEffect(
@@ -488,8 +488,8 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     },
     resultBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
     localBadge: { backgroundColor: theme.accentAlpha15 },
-    winBadge: { backgroundColor: "rgba(34,197,94,0.12)" },
-    lossBadge: { backgroundColor: "rgba(239,68,68,0.12)" },
+    winBadge: { backgroundColor: theme.successAlpha12 },
+    lossBadge: { backgroundColor: theme.errorAlpha12 },
     resultText: {
       fontSize: 10,
       fontFamily: "Inter_800ExtraBold",

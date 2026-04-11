@@ -37,7 +37,7 @@ const ACHIEVEMENT_MAP: Record<string, { name: string; desc: string }> = {
 
 function formatDuration(totalSec: number): string {
   const clamped = Math.max(0, Math.floor(totalSec));
-  const units: Array<{ label: string; seconds: number }> = [
+  const units: { label: string; seconds: number }[] = [
     { label: "y", seconds: 365 * 24 * 60 * 60 },
     { label: "mo", seconds: 30 * 24 * 60 * 60 },
     { label: "w", seconds: 7 * 24 * 60 * 60 },
@@ -60,8 +60,8 @@ export default function ProfileScreen() {
   const { settings } = useGameContext();
   const { profile, isPremium, user } = useAuthStore();
   const { achievements, fetchAchievements } = useStatsStore();
-  const theme = getThemeColors(settings.darkMode);
-  const st = useMemo(() => createStyles(theme), [theme]);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
+  const st = useMemo(() => createStyles(theme, settings.darkMode), [theme, settings.darkMode]);
   const [difficultyFilter, setDifficultyFilter] =
     useState<AIDifficultyFilter>("EASY");
   const [aiPerformance, setAiPerformance] =
@@ -227,9 +227,14 @@ export default function ProfileScreen() {
             </View>
             <View style={st.statCell}>
               <Text style={st.statLabel}>WIN PERCENTAGE</Text>
-              <View style={st.statRow}>
-                <Text style={st.statValue}>{winRate}%</Text>
-                <View style={st.statBar} />
+              <Text style={st.statValue}>{winRate}%</Text>
+              <View style={st.statBarTrack}>
+                <View
+                  style={[
+                    st.statBarFill,
+                    { width: `${Math.max(0, Math.min(winRate, 100))}%` },
+                  ]}
+                />
               </View>
               <Text style={st.statHint}>
                 AT <Text style={st.statHintMode}>{difficultyFilter}</Text>
@@ -366,10 +371,10 @@ export default function ProfileScreen() {
             </View>
             <View style={st.menuInfo}>
               <Text style={st.menuTitle}>
-                {isPremium ? "Subscription" : "Go Premium"}
+                {isPremium ? "Subscription" : "Remove Ads"}
               </Text>
               <Text style={st.menuSub}>
-                {isPremium ? "Manage your plan" : "Unlock all features"}
+                {isPremium ? "Manage your plan" : "Remove ads from the app"}
               </Text>
             </View>
             <Ionicons
@@ -437,7 +442,10 @@ export default function ProfileScreen() {
   );
 }
 
-const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
+const createStyles = (
+  theme: ReturnType<typeof getThemeColors>,
+  darkMode: boolean,
+) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     scroll: { paddingHorizontal: 20 },
@@ -451,7 +459,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       justifyContent: "center",
       marginBottom: 16,
       borderWidth: 2,
-      borderColor: "rgba(233, 106, 0, 0.55)",
+      borderColor: theme.borderFocus,
       overflow: "hidden",
     },
     avatarImage: { width: 80, height: 80, borderRadius: 40 },
@@ -569,14 +577,18 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
     },
-    statRow: { flexDirection: "row", alignItems: "center" },
-    statBar: {
-      width: 32,
-      height: 3,
+    statBarTrack: {
+      width: 52,
+      height: 4,
+      borderRadius: 2,
+      marginTop: 8,
+      backgroundColor: theme.secondaryBg,
+      overflow: "hidden",
+    },
+    statBarFill: {
+      height: 4,
+      borderRadius: 2,
       backgroundColor: theme.accent,
-      borderRadius: 1.5,
-      marginLeft: 8,
-      marginTop: 14,
     },
     moreBar: {
       flexDirection: "row",
@@ -586,7 +598,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       marginTop: 10,
       paddingVertical: 10,
       borderTopWidth: 1,
-      borderTopColor: "rgba(255,255,255,0.06)",
+      borderTopColor: theme.border,
     },
     moreBarText: {
       color: theme.accent,
@@ -661,7 +673,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       width: 40,
       height: 40,
       borderRadius: 10,
-      backgroundColor: "rgba(255,255,255,0.04)",
+      backgroundColor: theme.secondaryBg,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -680,7 +692,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     },
     avatarModalBackdrop: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.72)",
+      backgroundColor: theme.overlayGlass,
       alignItems: "center",
       justifyContent: "center",
       padding: 24,
@@ -715,7 +727,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 2,
-      borderColor: "rgba(233, 106, 0, 0.45)",
+      borderColor: theme.accentAlpha40,
     },
     avatarModalImage: { width: "100%", height: "100%" },
     avatarModalPrimaryBtn: {

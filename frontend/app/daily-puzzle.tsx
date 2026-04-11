@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../src/theme/colors';
+import { getThemeColors } from '../src/theme/colors';
+import { useGameContext } from '../src/storage/GameContext';
 import { useAuthStore } from '../src/store/authStore';
 import { DailyPuzzleService, DailyPuzzleProgress } from '../src/services/DailyPuzzleService';
 
@@ -16,9 +17,12 @@ const MOCK_PUZZLES = [
 export default function DailyPuzzleScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { settings } = useGameContext();
   const [progress, setProgress] = useState<DailyPuzzleProgress | null>(null);
   const [completed, setCompleted] = useState<string[]>([]);
   const [streakToast, setStreakToast] = useState(false);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
+  const st = useMemo(() => createStyles(theme), [theme]);
 
   useEffect(() => {
     if (user) {
@@ -52,7 +56,7 @@ export default function DailyPuzzleScreen() {
     <SafeAreaView style={st.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
         <TouchableOpacity onPress={() => router.back()} style={st.backBtn} activeOpacity={0.6}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textSecondary} />
+          <Ionicons name="arrow-back" size={22} color={theme.textSecondary} />
         </TouchableOpacity>
 
         <Text style={st.label}>DAILY CHALLENGE</Text>
@@ -83,7 +87,7 @@ export default function DailyPuzzleScreen() {
                 {done && <View style={st.puzzlePinstripe} />}
                 <View style={st.puzzleHeader}>
                   <Text style={st.puzzleTitle}>{p.title}</Text>
-                  {done && <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />}
+                  {done && <Ionicons name="checkmark-circle" size={20} color={theme.success} />}
                 </View>
                 <Text style={st.puzzleDesc}>{p.desc}</Text>
                 {!done && (
@@ -101,7 +105,7 @@ export default function DailyPuzzleScreen() {
 
       {streakToast && (
         <View style={st.toast}>
-          <Ionicons name="flame" size={16} color={COLORS.accent} />
+          <Ionicons name="flame" size={16} color={theme.accent} />
           <Text style={st.toastText}>STREAK INCREASED!</Text>
         </View>
       )}
@@ -109,24 +113,25 @@ export default function DailyPuzzleScreen() {
   );
 }
 
-const st = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   scroll: { paddingHorizontal: 20 },
   backBtn: { width: 44, height: 44, justifyContent: 'center', marginTop: 8 },
-  label: { color: COLORS.accent, fontSize: 11, fontFamily: 'Inter_700Bold', fontWeight: '700', letterSpacing: 2 },
-  heading: { color: COLORS.textPrimary, fontSize: 32, fontFamily: 'Inter_800ExtraBold', fontWeight: '800', marginTop: 4, marginBottom: 20 },
-  streakCard: { backgroundColor: COLORS.elevated, borderRadius: 14, padding: 18 },
+  label: { color: theme.accent, fontSize: 11, fontFamily: 'Inter_700Bold', fontWeight: '700', letterSpacing: 2 },
+  heading: { color: theme.textPrimary, fontSize: 32, fontFamily: 'Inter_800ExtraBold', fontWeight: '800', marginTop: 4, marginBottom: 20 },
+  streakCard: { backgroundColor: theme.elevated, borderRadius: 14, padding: 18 },
   streakRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  streakLabel: { color: COLORS.textSecondary, fontSize: 9, fontFamily: 'Inter_700Bold', fontWeight: '700', letterSpacing: 1, textAlign: 'center' },
-  streakValue: { color: COLORS.textPrimary, fontSize: 24, fontFamily: 'Inter_800ExtraBold', fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  streakLabel: { color: theme.textSecondary, fontSize: 9, fontFamily: 'Inter_700Bold', fontWeight: '700', letterSpacing: 1, textAlign: 'center' },
+  streakValue: { color: theme.textPrimary, fontSize: 24, fontFamily: 'Inter_800ExtraBold', fontWeight: '800', textAlign: 'center', marginTop: 4 },
   puzzleList: { marginTop: 20, gap: 10 },
-  puzzleCard: { backgroundColor: COLORS.elevated, borderRadius: 12, padding: 16, overflow: 'hidden', position: 'relative' },
-  puzzlePinstripe: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, backgroundColor: COLORS.accent },
+  puzzleCard: { backgroundColor: theme.elevated, borderRadius: 12, padding: 16, overflow: 'hidden', position: 'relative' },
+  puzzlePinstripe: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, backgroundColor: theme.accent },
   puzzleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  puzzleTitle: { color: COLORS.textPrimary, fontSize: 16, fontFamily: 'Inter_700Bold', fontWeight: '700' },
-  puzzleDesc: { color: COLORS.textSecondary, fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 6, lineHeight: 19 },
-  solveBtn: { backgroundColor: COLORS.accent, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
-  solveBtnText: { color: COLORS.background, fontSize: 13, fontFamily: 'Inter_800ExtraBold', fontWeight: '800', letterSpacing: 1 },
-  toast: { position: 'absolute', bottom: 100, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.elevated, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, zIndex: 200 },
-  toastText: { color: COLORS.accent, fontSize: 12, fontFamily: 'Inter_800ExtraBold', fontWeight: '800', letterSpacing: 1 },
+  puzzleTitle: { color: theme.textPrimary, fontSize: 16, fontFamily: 'Inter_700Bold', fontWeight: '700' },
+  puzzleDesc: { color: theme.textSecondary, fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 6, lineHeight: 19 },
+  solveBtn: { backgroundColor: theme.accent, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
+  solveBtnText: { color: theme.background, fontSize: 13, fontFamily: 'Inter_800ExtraBold', fontWeight: '800', letterSpacing: 1 },
+  toast: { position: 'absolute', bottom: 100, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.elevated, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, zIndex: 200 },
+  toastText: { color: theme.accent, fontSize: 12, fontFamily: 'Inter_800ExtraBold', fontWeight: '800', letterSpacing: 1 },
 });

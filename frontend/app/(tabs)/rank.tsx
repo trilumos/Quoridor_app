@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../../src/theme/colors";
+import { getThemeColors } from "../../src/theme/colors";
 import { useGameContext } from "../../src/storage/GameContext";
 
 const LEADERBOARD = [
@@ -17,7 +17,9 @@ const LEADERBOARD = [
 ];
 
 export default function RankScreen() {
-  const { stats } = useGameContext();
+  const { stats, settings } = useGameContext();
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
+  const st = useMemo(() => createStyles(theme), [theme]);
 
   return (
     <SafeAreaView style={st.container}>
@@ -76,7 +78,7 @@ export default function RankScreen() {
             <Ionicons
               name="trophy-outline"
               size={40}
-              color={COLORS.textSecondary}
+              color={theme.textSecondary}
             />
             <Text style={st.emptyTitle}>NO RANKING YET</Text>
             <Text style={st.emptyDesc}>
@@ -91,26 +93,27 @@ export default function RankScreen() {
   );
 }
 
-const st = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   scroll: { paddingHorizontal: 20 },
   headerArea: { marginTop: 20, marginBottom: 20 },
   label: {
-    color: COLORS.accent,
+    color: theme.accent,
     fontSize: 11,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
     letterSpacing: 2,
   },
   heading: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 32,
     fontFamily: "Inter_800ExtraBold",
     fontWeight: "800",
     marginTop: 4,
   },
   yourRankCard: {
-    backgroundColor: COLORS.elevated,
+    backgroundColor: theme.elevated,
     borderRadius: 14,
     overflow: "hidden",
     position: "relative",
@@ -121,7 +124,7 @@ const st = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 2.5,
-    backgroundColor: COLORS.accent,
+    backgroundColor: theme.accent,
   },
   yourRankContent: {
     flexDirection: "row",
@@ -131,14 +134,14 @@ const st = StyleSheet.create({
   },
   yourRankLeft: {},
   yourRankLabel: {
-    color: COLORS.accent,
+    color: theme.accent,
     fontSize: 10,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
     letterSpacing: 1.5,
   },
   yourRankNumber: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 28,
     fontFamily: "Inter_800ExtraBold",
     fontWeight: "800",
@@ -147,14 +150,14 @@ const st = StyleSheet.create({
   yourRankRight: { flexDirection: "row", gap: 20 },
   yourRankStat: { alignItems: "flex-end" },
   yourRankStatLabel: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 9,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
     letterSpacing: 1,
   },
   yourRankStatValue: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 18,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
@@ -171,46 +174,46 @@ const st = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: COLORS.secondaryBg,
+    backgroundColor: theme.secondaryBg,
     alignItems: "center",
     justifyContent: "center",
   },
   rankText: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 14,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
   },
-  rankTextTop: { color: COLORS.accent },
+  rankTextTop: { color: theme.accent },
   listInfo: { flex: 1 },
   listName: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 15,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
   },
   listMeta: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 11,
     fontFamily: "Inter_400Regular",
     marginTop: 2,
   },
   listRating: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 16,
     fontFamily: "Inter_800ExtraBold",
     fontWeight: "800",
   },
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 12 },
   emptyTitle: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 16,
     fontFamily: "Inter_800ExtraBold",
     fontWeight: "800",
     letterSpacing: 2,
   },
   emptyDesc: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     textAlign: "center",

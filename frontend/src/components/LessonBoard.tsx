@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, StyleSheet, Text } from "react-native";
+import { View, StyleSheet, Text, useWindowDimensions } from "react-native";
 import { getThemeColors } from "../theme/colors";
 import { useGameContext } from "../storage/GameContext";
 
@@ -22,32 +22,33 @@ export function LessonBoard({
   title,
   description,
 }: BoardVisualizerProps) {
+  const { width, fontScale } = useWindowDimensions();
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
   const isDark = settings.darkMode;
 
-  const cellSize = size / 9;
+  const responsiveSize = Math.max(
+    180,
+    Math.min(size, width - 72 - Math.max(0, fontScale - 1) * 24),
+  );
+  const cellSize = responsiveSize / 9;
   const wallThickness = 3;
   const WALL_COLOR = isDark
-    ? "rgba(255, 255, 255, 0.72)"
-    : "rgba(26, 26, 26, 0.9)";
+    ? theme.wallAvailable
+    : theme.wallPlaced;
   const WALL_EDGE_COLOR = isDark
-    ? "rgba(0, 0, 0, 0.28)"
-    : "rgba(255, 255, 255, 0.62)";
-  const HIGHLIGHT_COLOR = isDark
-    ? "rgba(255, 138, 51, 0.4)"
-    : "rgba(233, 106, 0, 0.3)";
-  const BLOCKED_COLOR = isDark
-    ? "rgba(255, 100, 100, 0.3)"
-    : "rgba(220, 38, 38, 0.22)";
+    ? theme.overlay
+    : theme.border;
+  const HIGHLIGHT_COLOR = theme.validMove;
+  const BLOCKED_COLOR = theme.errorAlpha12;
 
   const getCellColor = (cell: BoardCell): string => {
     switch (cell.type) {
       case "pawn1":
         return theme.accent;
       case "pawn2":
-        return "#4A90E2";
+        return theme.player2;
       case "goal":
         return "transparent";
       case "highlight":
@@ -86,9 +87,13 @@ export function LessonBoard({
 
   return (
     <View style={st.container}>
-      {title && <Text style={st.title}>{title}</Text>}
+      {title && (
+        <Text style={st.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}>
+          {title}
+        </Text>
+      )}
 
-      <View style={[st.boardContainer, { width: size, height: size }]}>
+      <View style={[st.boardContainer, { width: responsiveSize, height: responsiveSize }]}>
         {/* Grid */}
         {cells.map((row, r) =>
           row.map((cell, c) => (
@@ -101,7 +106,7 @@ export function LessonBoard({
                   top: r * cellSize,
                   width: cellSize,
                   height: cellSize,
-                  borderColor: "rgba(255, 138, 51, 0.15)",
+                  borderColor: theme.borderFocus,
                   borderWidth: 1,
                   backgroundColor: getCellColor(cell),
                 },
@@ -158,7 +163,11 @@ export function LessonBoard({
         })}
       </View>
 
-      {description && <Text style={st.description}>{description}</Text>}
+      {description && (
+        <Text style={st.description} numberOfLines={4}>
+          {description}
+        </Text>
+      )}
     </View>
   );
 }
@@ -172,7 +181,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       borderRadius: 8,
       overflow: "hidden",
       borderWidth: 1,
-      borderColor: "rgba(255, 138, 51, 0.2)",
+      borderColor: theme.borderFocus,
     },
     cell: {
       position: "absolute",
@@ -187,6 +196,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontWeight: "700",
       marginBottom: 8,
       letterSpacing: 1,
+      textAlign: "center",
     },
     description: {
       color: theme.textSecondary,
@@ -194,5 +204,6 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       marginTop: 8,
       textAlign: "center",
       lineHeight: 18,
+      maxWidth: "100%",
     },
   });

@@ -19,7 +19,7 @@ export default function GhostButton({
   color,
 }: Props) {
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
@@ -30,7 +30,14 @@ export default function GhostButton({
       activeOpacity={0.6}
       style={[styles.button, disabled && styles.disabled]}
     >
-      <Text style={[styles.text, color ? { color } : null]}>{title}</Text>
+      <Text
+        style={[styles.text, color ? { color } : null]}
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+      >
+        {title}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -39,8 +46,10 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
   StyleSheet.create({
     button: {
       paddingVertical: 12,
+      paddingHorizontal: 12,
       alignItems: "center",
       justifyContent: "center",
+      minWidth: 0,
     },
     disabled: { opacity: 0.35 },
     text: {
@@ -48,5 +57,6 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontSize: 14,
       fontWeight: "600",
       letterSpacing: 0.3,
+      textAlign: "center",
     },
   });

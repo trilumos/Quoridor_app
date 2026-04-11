@@ -10,9 +10,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
   useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { showInterstitial } from "../src/lib/ads";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
@@ -34,7 +36,6 @@ import {
 } from "../src/game/GameEngine";
 import { getAIMove } from "../src/game/AIPlayer";
 import GameBoard from "../src/components/GameBoard";
-import AchievementToast from "../src/components/AchievementToast";
 import WallIcon from "../src/components/WallIcon";
 import { useGameContext } from "../src/storage/GameContext";
 import { StorageService } from "../src/storage/StorageService";
@@ -91,22 +92,22 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
-function getCardTextPalette(accent: string, darkMode: boolean, isActive: boolean) {
+function getCardTextPalette(
+  theme: ReturnType<typeof getThemeColors>,
+  isActive: boolean,
+) {
   if (isActive) {
     return {
-      textPrimary: darkMode ? "#F8F6F2" : "#111111",
-      textSecondary: darkMode ? "rgba(248, 246, 242, 0.78)" : "rgba(17, 17, 17, 0.72)",
-      controlBorder: withAlpha(accent, 0.42),
+      textPrimary: theme.textPrimary,
+      textSecondary: theme.textSecondary,
+      controlBorder: theme.borderFocus,
     };
   }
 
-  const neutralText = darkMode ? "rgba(248, 246, 242, 0.68)" : "rgba(26, 26, 26, 0.68)";
   return {
-    textPrimary: neutralText,
-    textSecondary: neutralText,
-    controlBorder: darkMode
-      ? "rgba(248, 246, 242, 0.16)"
-      : "rgba(26, 26, 26, 0.16)",
+    textPrimary: theme.textSecondary,
+    textSecondary: theme.textSecondary,
+    controlBorder: theme.border,
   };
 }
 export default function GameScreen() {
@@ -119,6 +120,11 @@ export default function GameScreen() {
     recordWallsPlaced,
     incrementAdCounter,
     shouldShowAd,
+    queueAchievementUnlocks,
+    canUseUndo,
+    useUndo: consumeUndo,
+    resetUndoCount,
+    recordGameTimestamp,
   } = useGameContext();
   const { user, isPremium, profile } = useAuthStore();
   const { stats, recordGame } = useStatsStore();
@@ -130,7 +136,7 @@ export default function GameScreen() {
     shouldShowAd: storeShowAd,
   } = useGameStore();
   const { width: sw, height: sh } = useWindowDimensions();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(
     () => createStyles(theme, settings.darkMode),
     [theme, settings.darkMode],
@@ -166,15 +172,20 @@ export default function GameScreen() {
   const [aiThinking, setAiThinking] = useState(false);
   const [message, setMessage] = useState("");
   const [moveLog, setMoveLog] = useState<LogEntry[]>([]);
-  const [achievementQueue, setAchievementQueue] = useState<string[]>([]);
+  const [stateHistory, setStateHistory] = useState<GameState[]>([]);
+  const [rewardedUndoAvailable, setRewardedUndoAvailable] = useState(false);
   const [localLayoutMode, setLocalLayoutMode] =
     useState<LocalLayoutMode>("flip-turn");
   const [remainingSeconds, setRemainingSeconds] = useState<[number, number]>(
     () => [localTimeSec, localTimeSec],
   );
   const gameOverHandled = useRef(false);
+  const gameEndMethodRef = useRef<"normal" | "time">("normal");
   const moveCountRef = useRef(0);
   const resumeHydratedRef = useRef(false);
+  const rewardedContinueHydratedRef = useRef(false);
+  const rewardedUndoConsumedRef = useRef(false);
+  const interactionLockRef = useRef(false);
   const msgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -192,6 +203,81 @@ export default function GameScreen() {
   }, []);
 
   const isTimedLocal = mode === "local" && localTimeSec > 0;
+
+  useEffect(() => {
+    if (params.adType === "rewarded_undo") {
+      const restoreAndApplyRewardedUndo = async () => {
+        setRewardedUndoAvailable(true);
+        if (rewardedUndoConsumedRef.current) return;
+        const rewardToken =
+          typeof params.rewardToken === "string" ? params.rewardToken : null;
+        if (!rewardToken) return;
+
+        const saved = await StorageService.get<{
+          rewardToken: string;
+          gameState: GameState;
+          stateHistory: GameState[];
+        }>(StorageService.KEYS.REWARDED_UNDO_STATE);
+
+        if (!saved || saved.rewardToken !== rewardToken) return;
+        if (!saved?.stateHistory?.length) return;
+
+        rewardedUndoConsumedRef.current = true;
+
+        let popCount = 1;
+        let previousState = saved.stateHistory[saved.stateHistory.length - 1];
+        if (
+          mode === "ai" &&
+          previousState.currentPlayer === 1 &&
+          saved.stateHistory.length >= 2
+        ) {
+          popCount = 2;
+          previousState = saved.stateHistory[saved.stateHistory.length - 2];
+        }
+
+        setGameState(previousState);
+        setStateHistory(saved.stateHistory.slice(0, -popCount));
+        setSelectedIntersection(null);
+        setWallPreview(null);
+        setActionMode("move");
+        setAiThinking(false);
+        interactionLockRef.current = false;
+        setRewardedUndoAvailable(false);
+
+        await StorageService.clear(StorageService.KEYS.REWARDED_UNDO_STATE);
+      };
+
+      void restoreAndApplyRewardedUndo();
+    }
+  }, [mode, params.adType, params.rewardToken]);
+
+  useEffect(() => {
+    if (rewardedContinueHydratedRef.current) return;
+    if (params.adType !== "rewarded_continue" || mode !== "ai") return;
+
+    const restoreRewardedContinue = async () => {
+      const saved = await StorageService.get<{ state: GameState }>(
+        StorageService.KEYS.REWARDED_CONTINUE_STATE,
+      );
+      if (!saved?.state) return;
+
+      rewardedContinueHydratedRef.current = true;
+      gameOverHandled.current = false;
+      moveCountRef.current =
+        saved.state.moveCount[0] + saved.state.moveCount[1];
+      setGameState(saved.state);
+      setActionMode("move");
+      setSelectedIntersection(null);
+      setWallPreview(null);
+      setAiThinking(false);
+      setMessage("");
+      setMoveLog([]);
+      setStateHistory([]);
+      await StorageService.clear(StorageService.KEYS.REWARDED_CONTINUE_STATE);
+    };
+
+    void restoreRewardedContinue();
+  }, [mode, params.adType]);
 
   useEffect(() => {
     if (!shouldResume || resumeHydratedRef.current) return;
@@ -215,7 +301,29 @@ export default function GameScreen() {
     setAiThinking(false);
     setMessage("");
     setMoveLog([]);
+    setStateHistory([]);
   }, [shouldResume, storeSavedGame]);
+
+  const pushHistory = useCallback((snapshot: GameState) => {
+    setStateHistory((prev) => [...prev.slice(-9), snapshot]);
+  }, []);
+
+  useEffect(() => {
+    interactionLockRef.current = false;
+  }, [gameState.currentPlayer, gameState.moveCount]);
+
+  useEffect(() => {
+    const adType = typeof params.adType === "string" ? params.adType : "";
+    const isFreshAiStart =
+      mode === "ai" &&
+      !shouldResume &&
+      adType !== "rewarded_undo" &&
+      adType !== "rewarded_continue";
+
+    if (isFreshAiStart) {
+      resetUndoCount();
+    }
+  }, [mode, params.adType, resetUndoCount, shouldResume]);
 
   // Auto-save game state on every change
   useEffect(() => {
@@ -257,6 +365,7 @@ export default function GameScreen() {
     const t = setTimeout(() => {
       setGameState((prev) => {
         if (prev.currentPlayer !== 1 || prev.gameOver) return prev;
+        pushHistory(prev);
         const aiAction = getAIMove(prev, difficulty);
         if (aiAction.type === "move") {
           const from = prev.players[1].position;
@@ -278,7 +387,7 @@ export default function GameScreen() {
       setActionMode("move");
     }, 600);
     return () => clearTimeout(t);
-  }, [gameState.currentPlayer, gameState.gameOver, mode, difficulty, addLog]);
+  }, [gameState.currentPlayer, gameState.gameOver, mode, difficulty, addLog, pushHistory]);
 
   useEffect(() => {
     if (!isTimedLocal || gameState.gameOver) return;
@@ -292,6 +401,7 @@ export default function GameScreen() {
         next[activePlayer] = Math.max(0, next[activePlayer] - 1);
 
         if (next[activePlayer] === 0) {
+          gameEndMethodRef.current = "time";
           setGameState((state) => {
             if (state.gameOver) return state;
             return {
@@ -321,10 +431,21 @@ export default function GameScreen() {
             difficulty,
           );
         else recordLoss(10 - gameState.players[0].wallsRemaining);
+        incrementAdCounter();
+        incrementMatchCount();
+
+        if (gameState.winner !== 0) {
+          const undoSteps = Number(params.undoMoves || 5);
+          const rewindIndex = Math.max(0, stateHistory.length - undoSteps);
+          const rewindState = stateHistory[rewindIndex] ?? stateHistory[0] ?? gameState;
+          void StorageService.set(StorageService.KEYS.REWARDED_CONTINUE_STATE, {
+            state: rewindState,
+          });
+        }
       }
+      recordGameTimestamp();
+      resetUndoCount();
       recordWallsPlaced(gameState.wallsPlaced[0] + gameState.wallsPlaced[1]);
-      incrementAdCounter();
-      incrementMatchCount();
 
       // Record to local prototype storage
       const handleGameEnd = async () => {
@@ -388,7 +509,7 @@ export default function GameScreen() {
 
               const newAchievements = await recordGame(user.id, gameData);
               if (newAchievements.length > 0) {
-                setAchievementQueue(newAchievements);
+                queueAchievementUnlocks(newAchievements);
               }
             }
 
@@ -409,9 +530,10 @@ export default function GameScreen() {
         time: String(Math.floor((Date.now() - gameState.startTime) / 1000)),
         mode,
         difficulty: mode === "ai" ? difficulty : "",
+        winMethod: gameEndMethodRef.current,
       };
 
-      const saveAndRouteLocalGameOver = async () => {
+      const saveLocalGameExport = async () => {
         const durationSec = Math.floor(
           (Date.now() - gameState.startTime) / 1000,
         );
@@ -421,6 +543,7 @@ export default function GameScreen() {
           startTime: gameState.startTime,
           durationSec,
           winner: gameState.winner,
+          winMethod: gameEndMethodRef.current,
           players: [
             {
               index: 0,
@@ -442,31 +565,53 @@ export default function GameScreen() {
           timeLimitSec: localTimeSec,
           moveLog: [...moveLog].sort((a, b) => a.num - b.num),
         });
-
-        router.replace({ pathname: "/game-over", params: endParams } as never);
       };
 
-      if (mode === "local") {
-        saveAndRouteLocalGameOver();
-        return;
-      }
-
       setTimeout(() => {
-        if (shouldShowAd() || storeShowAd(isPremium)) {
-          router.replace({
-            pathname: "/ad-interstitial",
-            params: {
-              returnTo:
-                mode === "ai" && gameState.winner !== 0
-                  ? "/defeat"
-                  : "/victory",
-              ...endParams,
-            },
-          } as never);
+        const destination =
+          mode === "ai" && gameState.winner !== 0
+            ? "/defeat"
+            : "/victory";
+
+        const showAd = !isPremium && (
+          shouldShowAd() || storeShowAd(isPremium)
+        );
+
+        if ((mode as GameMode) === "local") {
+          void saveLocalGameExport();
+          // Always show ad after every Pass & Play game
+          // unless premium
+          if (!isPremium) {
+            showInterstitial(() => {
+              if (!destination) return;
+              router.replace({
+                pathname: "/game-over",
+                params: endParams,
+              } as never);
+            });
+          } else {
+            router.replace({
+              pathname: "/game-over",
+              params: endParams,
+            } as never);
+          }
+          return;
+        }
+
+        // For AI games: show ad every 2 games
+        if (showAd) {
+          showInterstitial(() => {
+            if (!destination) return;
+            router.replace({
+              pathname: destination,
+              params: endParams,
+            } as never);
+          });
         } else {
-          const destination =
-            mode === "ai" && gameState.winner !== 0 ? "/defeat" : "/victory";
-          router.replace({ pathname: destination, params: endParams } as never);
+          router.replace({
+            pathname: destination,
+            params: endParams,
+          } as never);
         }
       }, 1500);
     }
@@ -485,16 +630,22 @@ export default function GameScreen() {
     localTimeSec,
     mode,
     moveLog,
+    params.undoMoves,
     recordGame,
     recordLoss,
     recordWallsPlaced,
+    recordGameTimestamp,
+    resetUndoCount,
     recordWin,
     remainingSeconds,
     router,
     shouldShowAd,
+    queueAchievementUnlocks,
+    stateHistory,
     stats,
     storeShowAd,
     user,
+    gameState,
   ]);
 
   const notifyTurnChange = useCallback(() => {
@@ -503,15 +654,18 @@ export default function GameScreen() {
 
   const handleCellPress = useCallback(
     (row: number, col: number) => {
+      if (interactionLockRef.current) return;
       if (gameState.gameOver || aiThinking || actionMode !== "move") return;
       if (mode === "ai" && gameState.currentPlayer === 1) return;
       if (!validMoves.some((m) => m.row === row && m.col === col)) return;
+      interactionLockRef.current = true;
       const from = gameState.players[gameState.currentPlayer].position;
       const activeName = gameState.players[gameState.currentPlayer].name;
       addLog(
         `${activeName} Move`,
         `${posToNotation(from.row, from.col)} \u2192 ${posToNotation(row, col)}`,
       );
+      pushHistory(gameState);
       const ns = applyMove(gameState, { row, col });
       setGameState(ns);
       setSelectedIntersection(null);
@@ -527,6 +681,7 @@ export default function GameScreen() {
       mode,
       notifyTurnChange,
       addLog,
+      pushHistory,
     ],
   );
 
@@ -564,6 +719,7 @@ export default function GameScreen() {
   );
 
   const handlePlaceWall = useCallback(() => {
+    if (interactionLockRef.current) return;
     if (!wallPreview) return;
     if (
       !isValidWallPlacement(
@@ -577,11 +733,13 @@ export default function GameScreen() {
       void FeedbackService.error();
       return;
     }
+    interactionLockRef.current = true;
     const activeName = gameState.players[gameState.currentPlayer].name;
     addLog(
       `${activeName} Wall`,
       `${posToNotation(wallPreview.row, wallPreview.col)}-${wallPreview.orientation[0].toUpperCase()}`,
     );
+    pushHistory(gameState);
     const ns = applyWall(gameState, wallPreview);
     setGameState(ns);
     setSelectedIntersection(null);
@@ -589,7 +747,80 @@ export default function GameScreen() {
     setActionMode("move");
     void FeedbackService.impact();
     if (mode === "local" && !ns.gameOver) notifyTurnChange();
-  }, [wallPreview, gameState, mode, notifyTurnChange, addLog, showToast]);
+  }, [wallPreview, gameState, mode, notifyTurnChange, addLog, showToast, pushHistory]);
+
+  const handleUndo = useCallback(() => {
+    if (stateHistory.length === 0) {
+      showToast("No moves to undo");
+      return;
+    }
+
+    const allowedByReward = rewardedUndoAvailable;
+    if (!canUseUndo() && !allowedByReward) {
+      const openRewardedUndo = async () => {
+        rewardedUndoConsumedRef.current = false;
+        const rewardToken = `${Date.now()}_${Math.random()}`;
+        await StorageService.set(StorageService.KEYS.REWARDED_UNDO_STATE, {
+          rewardToken,
+          gameState,
+          stateHistory,
+        });
+
+        showInterstitial(() => {
+          
+          router.replace({
+            pathname: "/game",
+            params: {
+              adType: "rewarded_undo",
+              mode,
+              difficulty,
+              p1Name,
+              p2Name,
+              rewardToken,
+            },
+          } as never);
+        });
+      };
+
+      void openRewardedUndo();
+      return;
+    }
+
+    let popCount = 1;
+    let previousState = stateHistory[stateHistory.length - 1];
+
+    if (mode === "ai" && previousState.currentPlayer === 1 && stateHistory.length >= 2) {
+      popCount = 2;
+      previousState = stateHistory[stateHistory.length - 2];
+    }
+
+    setStateHistory((prev) => prev.slice(0, -popCount));
+    setGameState(previousState);
+    setSelectedIntersection(null);
+    setWallPreview(null);
+    setActionMode("move");
+
+    if (allowedByReward) {
+      setRewardedUndoAvailable(false);
+    } else if (!isPremium) {
+      consumeUndo();
+    }
+
+    void FeedbackService.impact();
+  }, [
+    canUseUndo,
+    difficulty,
+    isPremium,
+    mode,
+    p1Name,
+    p2Name,
+    rewardedUndoAvailable,
+    router,
+    showToast,
+    stateHistory,
+    consumeUndo,
+    gameState,
+  ]);
 
   const cp = gameState.currentPlayer;
   const isHuman = mode === "local" || cp === 0;
@@ -610,14 +841,10 @@ export default function GameScreen() {
     !useFaceToFace ||
     (!gameState.gameOver && !aiThinking && cp === bottomPlayerIndex);
   const topIsActive = cp === topPlayerIndex;
-  const topCardColors = getCardTextPalette(theme.accent, settings.darkMode, topIsActive);
-  const bottomCardColors = getCardTextPalette(
-    theme.accent,
-    settings.darkMode,
-    bottomSideCanAct,
-  );
-  const reservedUiHeight = useFaceToFace ? 390 : 340;
-  const boardSize = Math.max(232, Math.min(sw - 68, sh - reservedUiHeight));
+  const topCardColors = getCardTextPalette(theme, topIsActive);
+  const bottomCardColors = getCardTextPalette(theme, bottomSideCanAct);
+  const reservedUiHeight = useFaceToFace ? 430 : 350;
+  const boardSize = Math.max(208, Math.min(sw - 48, sh - reservedUiHeight));
 
   const handleMoveMode = useCallback(() => {
     setActionMode("move");
@@ -661,14 +888,14 @@ export default function GameScreen() {
             st.basicCard,
             active && st.basicCardActive,
             {
-              backgroundColor: settings.darkMode ? "#1D1D1D" : "#F7F7F3",
+              backgroundColor: settings.darkMode ? theme.elevated : theme.surface,
               borderColor: active
                 ? settings.darkMode
-                  ? "rgba(248, 246, 242, 0.92)"
-                  : "rgba(26, 26, 26, 0.92)"
+                  ? theme.borderFocus
+                  : theme.borderFocus
                 : settings.darkMode
-                  ? "rgba(248, 246, 242, 0.14)"
-                  : "rgba(26, 26, 26, 0.12)",
+                  ? theme.secondaryBg
+                  : theme.border,
             },
           ]}
         >
@@ -680,11 +907,11 @@ export default function GameScreen() {
                     st.avatarShell,
                     {
                       borderColor: settings.darkMode
-                        ? "rgba(248, 246, 242, 0.14)"
-                        : "rgba(26, 26, 26, 0.12)",
+                        ? theme.secondaryBg
+                        : theme.border,
                       backgroundColor: settings.darkMode
-                        ? "rgba(248, 246, 242, 0.05)"
-                        : "rgba(26, 26, 26, 0.04)",
+                        ? theme.secondaryBg
+                        : theme.secondaryBg,
                     },
                   ]}
                 >
@@ -704,11 +931,11 @@ export default function GameScreen() {
                   st.cardStatusPill,
                   {
                     backgroundColor: settings.darkMode
-                      ? "rgba(248, 246, 242, 0.05)"
-                      : "rgba(26, 26, 26, 0.04)",
+                      ? theme.secondaryBg
+                      : theme.secondaryBg,
                     borderColor: settings.darkMode
-                      ? "rgba(248, 246, 242, 0.10)"
-                      : "rgba(26, 26, 26, 0.08)",
+                      ? theme.border
+                      : theme.border,
                   },
                 ]}
               >
@@ -771,20 +998,20 @@ export default function GameScreen() {
     const controlBorderColor = controlAccentColor
       ? withAlpha(theme.accent, 0.5)
       : settings.darkMode
-        ? "rgba(248, 246, 242, 0.16)"
-        : "rgba(26, 26, 26, 0.16)";
+        ? theme.border
+        : theme.border;
     const controlIdleBg = settings.darkMode
-      ? "rgba(255, 122, 0, 0.22)"
-      : "rgba(255, 122, 0, 0.14)";
+      ? theme.accentAlpha15
+      : theme.accentAlpha15;
     const controlActiveBg = theme.accent;
     const controlIdleTextColor = settings.darkMode
-      ? "rgba(248, 246, 242, 0.82)"
-      : "rgba(26, 26, 26, 0.82)";
-    const controlActiveTextColor = settings.darkMode ? "#F8F6F2" : "#111111";
+      ? theme.textSecondary
+      : theme.textSecondary;
+    const controlActiveTextColor = settings.darkMode ? theme.textPrimary : theme.textPrimary;
     const wallColorForToggle = wallActive
       ? settings.darkMode
-        ? "#111111"
-        : "#FFFFFF"
+        ? theme.textPrimary
+        : theme.textPrimary
       : controlIdleTextColor;
     const confirmBg = canAct && wallActive ? controlActiveBg : controlIdleBg;
     const confirmBorder = controlBorderColor;
@@ -798,14 +1025,14 @@ export default function GameScreen() {
             st.activeCard,
             canAct && st.activeCardCurrent,
             {
-              backgroundColor: settings.darkMode ? "#1D1D1D" : "#F7F7F3",
+              backgroundColor: settings.darkMode ? theme.elevated : theme.surface,
               borderColor: canAct
                 ? settings.darkMode
-                  ? "rgba(248, 246, 242, 0.92)"
-                  : "rgba(26, 26, 26, 0.92)"
+                  ? theme.borderFocus
+                  : theme.borderFocus
                 : settings.darkMode
-                  ? "rgba(248, 246, 242, 0.14)"
-                  : "rgba(26, 26, 26, 0.12)",
+                  ? theme.secondaryBg
+                  : theme.border,
             },
           ]}
         >
@@ -817,11 +1044,11 @@ export default function GameScreen() {
                     st.avatarShell,
                     {
                       backgroundColor: settings.darkMode
-                        ? "rgba(248, 246, 242, 0.05)"
-                        : "rgba(26, 26, 26, 0.04)",
+                        ? theme.secondaryBg
+                        : theme.secondaryBg,
                       borderColor: settings.darkMode
-                        ? "rgba(248, 246, 242, 0.14)"
-                        : "rgba(26, 26, 26, 0.12)",
+                        ? theme.secondaryBg
+                        : theme.border,
                     },
                   ]}
                 >
@@ -843,8 +1070,8 @@ export default function GameScreen() {
                     {
                       color: canAct
                         ? settings.darkMode
-                          ? "#F8F6F2"
-                          : "#111111"
+                          ? theme.textPrimary
+                          : theme.textPrimary
                         : palette.textPrimary,
                     },
                   ]}
@@ -959,7 +1186,13 @@ export default function GameScreen() {
   return (
     <SafeAreaView testID="game-screen" style={st.container}>
       <View style={st.screen}>
-        <View style={st.main}>
+        <ScrollView
+          style={st.main}
+          contentContainerStyle={st.mainScroll}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={st.content}>
             <View style={st.cardStackTop}>
               {mode === "ai"
@@ -1013,6 +1246,7 @@ export default function GameScreen() {
                 onCellPress={handleCellPress}
                 onIntersectionPress={handleIntersectionPress}
                 boardSize={boardSize}
+                flipped={flipForPlayer2}
               />
             </View>
 
@@ -1110,19 +1344,26 @@ export default function GameScreen() {
                 </TouchableOpacity>
               </View>
             )}
+
+            {mode === "ai" && !gameState.gameOver && (
+              <View style={st.undoBar}>
+                <TouchableOpacity
+                  style={st.undoBtn}
+                  onPress={handleUndo}
+                  activeOpacity={0.85}
+                >
+                  <Text style={st.undoBtnText}>UNDO LAST MOVE</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
+        </ScrollView>
 
-          <AchievementToast
-            queue={achievementQueue}
-            onComplete={() => setAchievementQueue([])}
-          />
-
-          {message !== "" && (
-            <View testID="toast-message" style={st.toast}>
-              <Text style={st.toastText}>{message}</Text>
-            </View>
-          )}
-        </View>
+        {message !== "" && (
+          <View testID="toast-message" style={st.toast}>
+            <Text style={st.toastText}>{message}</Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -1141,9 +1382,13 @@ const createStyles = (
       paddingBottom: 16,
       paddingTop: 10,
     },
+    mainScroll: {
+      flexGrow: 1,
+      paddingBottom: 16,
+    },
     content: {
       flex: 1,
-      justifyContent: "space-between",
+      justifyContent: "flex-start",
       gap: 16,
     },
     cardStackTop: { flexShrink: 0 },
@@ -1151,7 +1396,7 @@ const createStyles = (
     boardWrap: {
       alignItems: "center",
       justifyContent: "center",
-      flex: 1,
+      flexShrink: 0,
       marginVertical: 12,
     },
     boardSection: {
@@ -1165,7 +1410,7 @@ const createStyles = (
       backgroundColor: theme.surfaceElevated,
       borderWidth: 1,
       borderColor: theme.border,
-      shadowColor: darkMode ? "#000000" : "#111111",
+      shadowColor: darkMode ? theme.overlay : theme.textPrimary,
       shadowOpacity: 0.2,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 8 },
@@ -1174,8 +1419,8 @@ const createStyles = (
     basicCard: { minHeight: 84 },
     basicCardActive: {
       borderColor: darkMode
-        ? "rgba(248, 246, 242, 0.12)"
-        : "rgba(26, 26, 26, 0.10)",
+        ? theme.secondaryBg
+        : theme.secondaryBg,
     },
     activeCard: { minHeight: 156 },
     activeCardCurrent: {
@@ -1184,7 +1429,7 @@ const createStyles = (
     cardGlowWrap: {
       padding: 1,
       borderRadius: 19,
-      backgroundColor: withAlpha(theme.accent, 0.24),
+      backgroundColor: theme.accentAlpha15,
       shadowColor: theme.accent,
       shadowOpacity: 0.24,
       shadowRadius: 12,
@@ -1304,9 +1549,11 @@ const createStyles = (
     actionToggleBar: {
       flexDirection: "row",
       gap: 8,
+      flexWrap: "wrap",
     },
     actionToggle: {
-      flex: 1,
+      flexBasis: "48%",
+      flexGrow: 1,
       minHeight: 34,
       flexDirection: "row",
       alignItems: "center",
@@ -1338,6 +1585,7 @@ const createStyles = (
       alignItems: "center",
       borderWidth: 1,
       borderColor: theme.accent,
+      width: "100%",
     },
     confirmDisabled: { opacity: 1 },
     confirmButtonText: {
@@ -1353,18 +1601,20 @@ const createStyles = (
       borderRadius: 14,
       padding: 4,
       gap: 4,
+      flexWrap: "wrap",
     },
     layoutSwitchBtn: {
       flex: 1,
+      minWidth: 0,
       borderRadius: 10,
       paddingVertical: 10,
       alignItems: "center",
       backgroundColor: theme.secondaryBg,
     },
     layoutSwitchBtnActive: {
-      backgroundColor: withAlpha(theme.accent, 0.14),
+      backgroundColor: theme.accentAlpha15,
       borderWidth: 1,
-      borderColor: withAlpha(theme.accent, 0.42),
+      borderColor: theme.borderFocus,
     },
     layoutSwitchText: {
       color: theme.textSecondary,
@@ -1372,8 +1622,28 @@ const createStyles = (
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
       letterSpacing: 1,
+      textAlign: "center",
     },
     layoutSwitchTextActive: { color: theme.accent },
+    undoBar: {
+      marginTop: 8,
+      gap: 8,
+    },
+    undoBtn: {
+      borderRadius: 10,
+      paddingVertical: 11,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.borderFocus,
+      backgroundColor: theme.accentAlpha15,
+    },
+    undoBtnText: {
+      color: theme.accent,
+      fontSize: 12,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 0.8,
+    },
     toast: {
       position: "absolute",
       left: 20,

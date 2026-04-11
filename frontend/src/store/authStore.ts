@@ -16,6 +16,7 @@ interface AuthState {
   updateUsername: (username: string) => Promise<boolean>;
   updateAvatar: (avatarUrl: string) => Promise<boolean>;
   activatePremium: (tier: "monthly" | "annual") => Promise<boolean>;
+  setPremiumStatus: (enabled: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   reset: () => void;
 }
@@ -26,7 +27,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   isAuthenticated: false,
   isLoading: true,
-  isPremium: true,
+  isPremium: false,
 
   initialize: async () => {
     set({ isLoading: true });
@@ -79,7 +80,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { user } = get();
     if (!user) return;
     const profile = await ProfileService.getProfile(user.id);
-    set({ profile, isPremium: true });
+    set({ profile, isPremium: !!profile?.is_premium });
   },
 
   updateUsername: async (username: string) => {
@@ -123,6 +124,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return ok;
   },
 
+  setPremiumStatus: async (enabled: boolean) => {
+    const { user } = get();
+    if (!user) {
+      set({ isPremium: enabled });
+      return;
+    }
+
+    if (enabled) {
+      await ProfileService.activatePremium(user.id, "monthly");
+    } else {
+      await ProfileService.deactivatePremium(user.id);
+    }
+
+    set((state) => ({
+      isPremium: enabled,
+      profile: state.profile
+        ? {
+            ...state.profile,
+            is_premium: enabled,
+            premium_tier: enabled ? state.profile.premium_tier || "monthly" : null,
+            premium_expires_at: enabled ? state.profile.premium_expires_at : null,
+          }
+        : state.profile,
+    }));
+  },
+
   signOut: async () => {
     await AuthService.signOut();
     get().reset();
@@ -135,7 +162,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       profile: null,
       isAuthenticated: false,
       isLoading: false,
-      isPremium: true,
+      isPremium: false,
     });
   },
 }));

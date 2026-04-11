@@ -19,10 +19,11 @@ import {
   AiPerformanceSummary,
   StatsService,
 } from "../../src/services/StatsService";
+import PrimaryButton from "../../src/components/PrimaryButton";
 
 function formatDuration(totalSec: number): string {
   const clamped = Math.max(0, Math.floor(totalSec));
-  const units: Array<{ label: string; seconds: number }> = [
+  const units: { label: string; seconds: number }[] = [
     { label: "y", seconds: 365 * 24 * 60 * 60 },
     { label: "mo", seconds: 30 * 24 * 60 * 60 },
     { label: "w", seconds: 7 * 24 * 60 * 60 },
@@ -51,7 +52,7 @@ export default function HomeScreen() {
   const [aiPerformance, setAiPerformance] =
     useState<AiPerformanceSummary | null>(null);
 
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const s = useMemo(
     () => createStyles(theme, settings.darkMode),
     [theme, settings.darkMode],
@@ -131,15 +132,12 @@ export default function HomeScreen() {
         <View style={s.heroSection}>
           <Text style={s.heroLabel}>STRATEGY ARENA</Text>
           <Text style={s.heroTitle}>{"COMMAND THE\nBOARD."}</Text>
-          <TouchableOpacity
+          <PrimaryButton
             testID="start-game-btn"
-            style={s.startBtn}
-            activeOpacity={0.85}
+            title="START GAME"
             onPress={() => router.push("/mode-select" as never)}
-          >
-            <Text style={s.startBtnText}>START GAME</Text>
-            <Ionicons name="play" size={18} color={theme.background} />
-          </TouchableOpacity>
+            // Optionally, you can add an icon inside PrimaryButton if needed
+          />
         </View>
 
         <View style={s.card}>
@@ -342,7 +340,7 @@ const createStyles = (
     },
     difficultyRow: {
       flexDirection: "row",
-      backgroundColor: darkMode ? "#23262E" : theme.surfaceElevated,
+      backgroundColor: theme.surfaceElevated,
       borderRadius: 16,
       marginTop: 14,
       padding: 4,
@@ -393,7 +391,7 @@ const createStyles = (
       height: 4,
       borderRadius: 2,
       marginTop: 8,
-      backgroundColor: darkMode ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)",
+      backgroundColor: theme.secondaryBg,
       overflow: "hidden",
     },
     statBarFill: { height: 4, borderRadius: 2, backgroundColor: theme.accent },

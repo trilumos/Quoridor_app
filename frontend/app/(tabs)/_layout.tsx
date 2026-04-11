@@ -6,7 +6,7 @@ import { useGameContext } from "../../src/storage/GameContext";
 
 export default function TabLayout() {
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
 
   return (
     <Tabs

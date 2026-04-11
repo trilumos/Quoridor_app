@@ -1,5 +1,11 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,12 +15,17 @@ import { useGameContext } from "../src/storage/GameContext";
 export default function ModeSelectScreen() {
   const router = useRouter();
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
 
   return (
     <SafeAreaView style={st.container}>
-      <View style={st.inner}>
+      <ScrollView
+        style={st.scroll}
+        contentContainerStyle={st.inner}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <TouchableOpacity
           onPress={() => router.back()}
           style={st.backBtn}
@@ -29,7 +40,9 @@ export default function ModeSelectScreen() {
 
         <View style={st.content}>
           <Text style={st.label}>SELECT MODE</Text>
-          <Text style={st.heading}>{"HOW DO YOU\nWANT TO PLAY?"}</Text>
+          <Text style={st.heading} adjustsFontSizeToFit minimumFontScale={0.8}>
+            {"HOW DO YOU\nWANT TO PLAY?"}
+          </Text>
 
           <View style={st.cards}>
             <TouchableOpacity
@@ -91,7 +104,7 @@ export default function ModeSelectScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -99,9 +112,14 @@ export default function ModeSelectScreen() {
 const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    inner: { flex: 1, paddingHorizontal: 24 },
+    scroll: { flex: 1 },
+    inner: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingBottom: 24,
+    },
     backBtn: { width: 44, height: 44, justifyContent: "center", marginTop: 8 },
-    content: { flex: 1, justifyContent: "center" },
+    content: { flex: 1, justifyContent: "center", paddingVertical: 8 },
     label: {
       color: theme.accent,
       fontSize: 11,
@@ -122,7 +140,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     card: {
       backgroundColor: theme.elevated,
       borderRadius: 14,
-      padding: 20,
+      padding: 18,
       flexDirection: "row",
       alignItems: "center",
       gap: 16,
@@ -141,7 +159,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       width: 52,
       height: 52,
       borderRadius: 14,
-      backgroundColor: "rgba(255,255,255,0.04)",
+      backgroundColor: theme.secondaryBg,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -152,6 +170,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontFamily: "Inter_800ExtraBold",
       fontWeight: "800",
       letterSpacing: 1,
+      flexShrink: 1,
     },
     cardDesc: {
       color: theme.textSecondary,
@@ -159,6 +178,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontFamily: "Inter_400Regular",
       lineHeight: 17,
       marginTop: 4,
+      flexShrink: 1,
     },
     cardArrow: { paddingLeft: 4 },
   });

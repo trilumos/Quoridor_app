@@ -16,7 +16,7 @@ export default function SplashScreen() {
   const router = useRouter();
   const { isLoading, profile, isAuthenticated } = useAuthStore();
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
 
   const [promptReady, setPromptReady] = useState(false);
   const [promptSeen, setPromptSeen] = useState<boolean | null>(null);

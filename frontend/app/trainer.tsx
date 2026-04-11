@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -178,10 +179,16 @@ const SECTIONS = [
 export default function TrainerScreen() {
   const router = useRouter();
   const { settings } = useGameContext();
+  const { width, fontScale } = useWindowDimensions();
   const [activeSection, setActiveSection] = useState("rules");
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
+
+  const responsiveLessonSize = Math.max(
+    180,
+    Math.min(240, width - 72 - Math.max(0, fontScale - 1) * 24),
+  );
 
   const section = SECTIONS.find((s) => s.id === activeSection)!;
 
@@ -189,6 +196,7 @@ export default function TrainerScreen() {
     if (!item.visual) return null;
 
     const { type, boardSize, description } = item.visual;
+    const visualSize = Math.min(boardSize, responsiveLessonSize);
 
     type LessonCellType =
       | "empty"
@@ -220,7 +228,7 @@ export default function TrainerScreen() {
         return (
           <LessonBoard
             cells={board}
-            size={boardSize}
+            size={visualSize}
             title="Starting Position"
             description={description}
           />
@@ -237,7 +245,7 @@ export default function TrainerScreen() {
         return (
           <LessonBoard
             cells={board}
-            size={boardSize}
+            size={visualSize}
             title="Valid Moves (Orange = Valid)"
             description={description}
           />
@@ -255,7 +263,7 @@ export default function TrainerScreen() {
           <LessonBoard
             cells={board}
             walls={walls}
-            size={boardSize}
+            size={visualSize}
             title="Wall Examples"
             description={description}
           />
@@ -272,7 +280,7 @@ export default function TrainerScreen() {
         return (
           <LessonBoard
             cells={board}
-            size={boardSize}
+            size={visualSize}
             title="Jump & Diagonal Options"
             description={description}
           />
@@ -287,7 +295,7 @@ export default function TrainerScreen() {
         return (
           <LessonBoard
             cells={board}
-            size={boardSize}
+            size={visualSize}
             title="Victory Position"
             description={description}
           />
@@ -305,7 +313,7 @@ export default function TrainerScreen() {
         return (
           <LessonBoard
             cells={board}
-            size={boardSize}
+            size={visualSize}
             title="Shortest Path to Goal"
             description={description}
           />
@@ -325,7 +333,7 @@ export default function TrainerScreen() {
           <LessonBoard
             cells={board}
             walls={walls}
-            size={boardSize}
+            size={visualSize}
             title="Strategic Wall Placement"
             description={description}
           />
@@ -346,7 +354,7 @@ export default function TrainerScreen() {
           <LessonBoard
             cells={board}
             walls={walls}
-            size={boardSize}
+            size={visualSize}
             title="Creating a Corridor"
             description={description}
           />
@@ -366,7 +374,7 @@ export default function TrainerScreen() {
           <LessonBoard
             cells={board}
             walls={walls}
-            size={boardSize}
+            size={visualSize}
             title="Protecting Your Path"
             description={description}
           />
@@ -381,7 +389,7 @@ export default function TrainerScreen() {
         return (
           <LessonBoard
             cells={board}
-            size={boardSize}
+            size={visualSize}
             title="Position Advantage Control"
             description={description}
           />
@@ -398,7 +406,7 @@ export default function TrainerScreen() {
           <LessonBoard
             cells={board}
             walls={walls}
-            size={boardSize}
+            size={visualSize}
             title="Endgame with Few Walls"
             description={description}
           />
@@ -417,7 +425,7 @@ export default function TrainerScreen() {
           <LessonBoard
             cells={board}
             walls={walls}
-            size={boardSize}
+            size={visualSize}
             title="Breaking Symmetry"
             description={description}
           />
@@ -437,7 +445,7 @@ export default function TrainerScreen() {
           <LessonBoard
             cells={board}
             walls={walls}
-            size={boardSize}
+            size={visualSize}
             title="Sacrificial Wall"
             description={description}
           />
@@ -467,7 +475,11 @@ export default function TrainerScreen() {
         <Text style={st.heading}>TRAINER</Text>
 
         {/* Section Tabs */}
-        <View style={st.tabs}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={st.tabs}
+        >
           {SECTIONS.map((s) => (
             <TouchableOpacity
               key={s.id}
@@ -489,12 +501,15 @@ export default function TrainerScreen() {
               />
               <Text
                 style={[st.tabText, activeSection === s.id && st.tabTextActive]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
               >
                 {s.title}
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
         {/* Content */}
         <View style={st.contentArea}>
@@ -561,16 +576,22 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontWeight: "800",
       marginTop: 4,
       marginBottom: 20,
+      flexShrink: 1,
     },
-    tabs: { flexDirection: "row", gap: 8 },
+    tabs: {
+      flexDirection: "row",
+      gap: 8,
+      paddingRight: 4,
+    },
     tab: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
       backgroundColor: theme.elevated,
       borderRadius: 10,
-      paddingHorizontal: 14,
+      paddingHorizontal: 12,
       paddingVertical: 10,
+      justifyContent: "center",
     },
     tabActive: { backgroundColor: theme.accent },
     tabText: {
@@ -611,6 +632,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
       flex: 1,
+      flexShrink: 1,
     },
     expandedContent: { marginTop: 12 },
     cardContent: {

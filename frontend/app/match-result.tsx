@@ -9,9 +9,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../src/theme/colors";
+import { getThemeColors } from "../src/theme/colors";
 import { StorageService } from "../src/storage/StorageService";
 import { useAuthStore } from "../src/store/authStore";
+import { useGameContext } from "../src/storage/GameContext";
 
 type MatchLogEntry = { num: number; type: string; detail: string };
 type MatchHistoryEntry = {
@@ -54,6 +55,9 @@ export default function MatchResultScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthStore();
+  const { settings } = useGameContext();
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
+  const st = useMemo(() => createStyles(theme), [theme]);
   const [entry, setEntry] = useState<MatchHistoryEntry | null>(null);
 
   const recordId = (params.id as string) || "";
@@ -125,7 +129,7 @@ export default function MatchResultScreen() {
             <Ionicons
               name="arrow-back"
               size={22}
-              color={COLORS.textSecondary}
+              color={theme.textSecondary}
             />
           </TouchableOpacity>
           <Text style={st.loadingTitle}>MATCH NOT FOUND</Text>
@@ -151,7 +155,7 @@ export default function MatchResultScreen() {
           style={st.backBtn}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={22} color={COLORS.textSecondary} />
+          <Ionicons name="arrow-back" size={22} color={theme.textSecondary} />
         </TouchableOpacity>
 
         <View style={st.hero}>
@@ -171,9 +175,9 @@ export default function MatchResultScreen() {
               color={
                 isAi
                   ? isVictory
-                    ? COLORS.success
-                    : COLORS.error
-                  : COLORS.accent
+                    ? theme.success
+                    : theme.error
+                  : theme.accent
               }
             />
           </View>
@@ -193,7 +197,7 @@ export default function MatchResultScreen() {
         </View>
 
         <View style={st.card}>
-          <Text style={st.cardTitle}>MATCH SUMMARY</Text>
+          <Text style={st.cardTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>MATCH SUMMARY</Text>
           <View style={st.row}>
             <Text style={st.label}>Mode</Text>
             <Text style={st.value}>{isAi ? "AI" : "Multiplayer"}</Text>
@@ -223,7 +227,7 @@ export default function MatchResultScreen() {
         </View>
 
         <View style={st.card}>
-          <Text style={st.cardTitle}>PLAYERS</Text>
+          <Text style={st.cardTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>PLAYERS</Text>
           <View style={st.row}>
             <Text style={st.label}>Player 1</Text>
             <Text style={st.value}>{view.p1}</Text>
@@ -233,8 +237,8 @@ export default function MatchResultScreen() {
             <Text style={st.value}>{view.p2}</Text>
           </View>
           <View style={st.row}>
-            <Text style={st.label}>Winner</Text>
-            <Text style={st.value}>{view.winnerName}</Text>
+            <Text style={st.label} numberOfLines={1}>Winner</Text>
+            <Text style={st.value} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{view.winnerName}</Text>
           </View>
           <View style={st.row}>
             <Text style={st.label}>Loser</Text>
@@ -243,7 +247,7 @@ export default function MatchResultScreen() {
         </View>
 
         <View style={st.card}>
-          <Text style={st.cardTitle}>MOVE LOG ({view.log.length})</Text>
+          <Text style={st.cardTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>MOVE LOG ({view.log.length})</Text>
           {view.log.length === 0 ? (
             <Text style={st.emptyLog}>
               No move log available for this record.
@@ -266,8 +270,9 @@ export default function MatchResultScreen() {
   );
 }
 
-const st = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   scroll: { paddingHorizontal: 20 },
   loadingWrap: {
     flex: 1,
@@ -276,7 +281,7 @@ const st = StyleSheet.create({
     paddingHorizontal: 24,
   },
   loadingTitle: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 22,
     fontFamily: "Inter_800ExtraBold",
     fontWeight: "800",
@@ -284,7 +289,7 @@ const st = StyleSheet.create({
     marginTop: 12,
   },
   loadingDesc: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     marginTop: 8,
@@ -299,11 +304,11 @@ const st = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  heroWinBg: { backgroundColor: "rgba(34,197,94,0.12)" },
-  heroLossBg: { backgroundColor: "rgba(239,68,68,0.12)" },
-  heroLocalBg: { backgroundColor: COLORS.accentAlpha15 },
+  heroWinBg: { backgroundColor: theme.successAlpha12 },
+  heroLossBg: { backgroundColor: theme.errorAlpha12 },
+  heroLocalBg: { backgroundColor: theme.accentAlpha15 },
   heroTitle: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 28,
     fontFamily: "Inter_800ExtraBold",
     fontWeight: "800",
@@ -312,7 +317,7 @@ const st = StyleSheet.create({
     textAlign: "center",
   },
   heroSub: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 13,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
@@ -321,18 +326,19 @@ const st = StyleSheet.create({
     textAlign: "center",
   },
   card: {
-    backgroundColor: COLORS.elevated,
+    backgroundColor: theme.elevated,
     borderRadius: 14,
     padding: 16,
     marginTop: 10,
   },
   cardTitle: {
-    color: COLORS.accent,
+    color: theme.accent,
     fontSize: 11,
     fontFamily: "Inter_800ExtraBold",
     fontWeight: "800",
     letterSpacing: 1.6,
     marginBottom: 10,
+    flexShrink: 1,
   },
   row: {
     flexDirection: "row",
@@ -341,27 +347,29 @@ const st = StyleSheet.create({
     paddingVertical: 6,
   },
   label: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 12,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
     letterSpacing: 0.5,
+    flexShrink: 1,
   },
   value: {
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontSize: 13,
     fontFamily: "Inter_700Bold",
     fontWeight: "700",
     maxWidth: "55%",
     textAlign: "right",
+    flexShrink: 1,
   },
   emptyLog: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 12,
     fontFamily: "Inter_400Regular",
   },
   logLine: {
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     marginBottom: 4,

@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +20,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": false,
-      "package": "com.trilumosapp.quoridor"
+      "package": "com.trilumosapp.quoridor",
+      "runtimeVersion": "1.0.0"
     },
     "androidStatusBar": {
       "backgroundColor": "#000000",
@@ -56,6 +60,12 @@
             }
           }
         }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-4447692643301149~7670516774"
+        }
       ]
     ],
     "experiments": {
@@ -64,9 +74,12 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "980de41e-3dc5-4979-9f40-e56b74ba3b78"
+        "projectId": "4d4af98a-2514-4485-9a1a-36b89656bfd0"
       }
     },
-    "owner": "trilumosapp"
+    "owner": "deepkakadiya25s-organization",
+    "updates": {
+      "url": "https://u.expo.dev/980de41e-3dc5-4979-9f40-e56b74ba3b78"
+    }
   }
 }

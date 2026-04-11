@@ -110,4 +110,22 @@ export const ProfileService = {
       return false;
     }
   },
+
+  async deactivatePremium(userId: string): Promise<boolean> {
+    try {
+      const current = await this.getProfile(userId);
+      const next = current
+        ? {
+            ...current,
+            is_premium: false,
+            premium_tier: null,
+            premium_expires_at: null,
+          }
+        : createDefaultProfile(userId);
+      await StorageService.set(profileKey(userId), next);
+      return true;
+    } catch {
+      return false;
+    }
+  },
 };

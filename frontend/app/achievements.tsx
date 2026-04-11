@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -12,12 +12,114 @@ import { Ionicons } from "@expo/vector-icons";
 import { getThemeColors } from "../src/theme/colors";
 import { useGameContext } from "../src/storage/GameContext";
 
+type AchievementCategory = {
+  key: string;
+  title: string;
+  icon: string;
+  ids: string[];
+};
+
+const ACHIEVEMENT_CATEGORIES: AchievementCategory[] = [
+  {
+    key: "victory",
+    title: "Victory",
+    icon: "trophy-outline",
+    ids: [
+      "first_victory",
+      "win_streak_3",
+      "win_streak_5",
+      "win_streak_10",
+      "comeback_king",
+    ],
+  },
+  {
+    key: "walls",
+    title: "Walls",
+    icon: "grid-outline",
+    ids: ["pacifist", "wall_master", "architect", "great_wall"],
+  },
+  {
+    key: "speed",
+    title: "Speed",
+    icon: "flash-outline",
+    ids: ["speedrun", "blitz", "slow_burn"],
+  },
+  {
+    key: "ai",
+    title: "AI",
+    icon: "hardware-chip-outline",
+    ids: [
+      "beat_novice",
+      "beat_strategic",
+      "beat_grandmaster",
+      "grandmaster_streak",
+      "beat_all_difficulties",
+    ],
+  },
+  {
+    key: "progression",
+    title: "Progression",
+    icon: "trending-up-outline",
+    ids: ["dedicated", "veteran", "centurion", "win_25", "win_50", "win_100"],
+  },
+  {
+    key: "pass_play",
+    title: "Pass & Play",
+    icon: "people-outline",
+    ids: ["social_player", "local_legend"],
+  },
+  {
+    key: "special",
+    title: "Special",
+    icon: "sparkles-outline",
+    ids: ["no_jumping", "night_owl", "early_bird"],
+  },
+];
+
 export default function AchievementsScreen() {
   const router = useRouter();
   const { achievements, settings } = useGameContext();
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
-  const theme = getThemeColors(settings.darkMode);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(ACHIEVEMENT_CATEGORIES.map((c) => [c.key, false])),
+  );
+
+  const categorizedAchievements = useMemo(() => {
+    const usedIds = new Set<string>();
+    const grouped = ACHIEVEMENT_CATEGORIES.map((category) => {
+      const items = achievements.filter((achievement) => {
+        const included = category.ids.includes(achievement.id);
+        if (included) usedIds.add(achievement.id);
+        return included;
+      });
+      const completed = items.filter((item) => item.unlocked).length;
+      return { ...category, items, completed };
+    }).filter((category) => category.items.length > 0);
+
+    const uncategorized = achievements.filter(
+      (achievement) => !usedIds.has(achievement.id),
+    );
+
+    if (uncategorized.length > 0) {
+      grouped.push({
+        key: "other",
+        title: "Other",
+        icon: "apps-outline",
+        ids: [],
+        items: uncategorized,
+        completed: uncategorized.filter((item) => item.unlocked).length,
+      });
+    }
+
+    return grouped;
+  }, [achievements]);
+
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
+
+  const toggleCategory = (key: string) => {
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   return (
     <SafeAreaView style={st.container}>
@@ -54,59 +156,119 @@ export default function AchievementsScreen() {
         </View>
 
         <View style={st.list}>
-          {achievements.map((a) => (
-            <View
-              key={a.id}
-              style={[st.achievementCard, a.unlocked && st.achievementUnlocked]}
-            >
-              {a.unlocked && <View style={st.achievementPinstripe} />}
-              <View
-                style={[
-                  st.achievementIcon,
-                  a.unlocked && st.achievementIconUnlocked,
-                ]}
-              >
-                <Ionicons
-                  name={a.unlocked ? "ribbon" : "ribbon-outline"}
-                  size={24}
-                  color={a.unlocked ? theme.accent : theme.textSecondary}
-                />
-              </View>
-              <View style={st.achievementInfo}>
-                <Text
-                  style={[
-                    st.achievementName,
-                    !a.unlocked && st.achievementNameLocked,
-                  ]}
+          {categorizedAchievements.map((category) => {
+            const isExpanded = expanded[category.key] ?? true;
+            const completionPercent =
+              category.items.length === 0
+                ? 0
+                : Math.round((category.completed / category.items.length) * 100);
+
+            return (
+              <View key={category.key} style={st.categoryWrap}>
+                <TouchableOpacity
+                  style={st.categoryHeader}
+                  activeOpacity={0.75}
+                  onPress={() => toggleCategory(category.key)}
                 >
-                  {a.name}
-                </Text>
-                <Text style={st.achievementDesc}>{a.description}</Text>
-                {a.target > 1 && (
-                  <View style={st.achievementProgress}>
-                    <View style={st.achievementTrack}>
-                      <View
-                        style={[
-                          st.achievementFill,
-                          { width: `${(a.progress / a.target) * 100}%` },
-                        ]}
+                  <View style={st.categoryHeaderLeft}>
+                    <View style={st.categoryIconWrap}>
+                      <Ionicons
+                        name={category.icon as any}
+                        size={18}
+                        color={theme.accent}
                       />
                     </View>
-                    <Text style={st.achievementCount}>
-                      {a.progress}/{a.target}
-                    </Text>
+                    <View style={st.categoryMeta}>
+                      <Text style={st.categoryTitle}>{category.title}</Text>
+                      <Text style={st.categoryCount}>
+                        {category.completed}/{category.items.length} completed
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={st.categoryHeaderRight}>
+                    <Text style={st.categoryPercent}>{completionPercent}%</Text>
+                    <Ionicons
+                      name={isExpanded ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color={theme.textSecondary}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                <View style={st.categoryTrack}>
+                  <View style={[st.categoryFill, { width: `${completionPercent}%` }]} />
+                </View>
+
+                {isExpanded && (
+                  <View style={st.categoryList}>
+                    {category.items.map((a) => (
+                      <View
+                        key={a.id}
+                        style={[st.achievementCard, a.unlocked && st.achievementUnlocked]}
+                      >
+                        {a.unlocked && <View style={st.achievementPinstripe} />}
+                        <View
+                          style={[
+                            st.achievementIcon,
+                            a.unlocked && st.achievementIconUnlocked,
+                          ]}
+                        >
+                          <Ionicons
+                            name={a.unlocked ? "ribbon" : "ribbon-outline"}
+                            size={24}
+                            color={a.unlocked ? theme.accent : theme.textSecondary}
+                          />
+                        </View>
+                        <View style={st.achievementInfo}>
+                          <View style={st.achievementTopRow}>
+                            <Text
+                              style={[
+                                st.achievementName,
+                                !a.unlocked && st.achievementNameLocked,
+                              ]}
+                            >
+                              {a.name}
+                            </Text>
+                            <View style={st.typePill}>
+                              <Text style={st.typePillText}>{category.title}</Text>
+                            </View>
+                          </View>
+                          <Text style={st.achievementDesc}>{a.description}</Text>
+                          {a.target > 1 && (
+                            <View style={st.achievementProgress}>
+                              <View style={st.achievementTrack}>
+                                <View
+                                  style={[
+                                    st.achievementFill,
+                                    {
+                                      width: `${Math.max(
+                                        0,
+                                        Math.min((a.progress / a.target) * 100, 100),
+                                      )}%`,
+                                    },
+                                  ]}
+                                />
+                              </View>
+                              <Text style={st.achievementCount}>
+                                {a.progress}/{a.target}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        {a.unlocked && (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={20}
+                            color={theme.success}
+                          />
+                        )}
+                      </View>
+                    ))}
                   </View>
                 )}
               </View>
-              {a.unlocked && (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color={theme.success}
-                />
-              )}
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         <View style={{ height: 24 }} />
@@ -164,11 +326,61 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     progressTrack: {
       flex: 1,
       height: 4,
-      backgroundColor: "rgba(255,255,255,0.08)",
+      backgroundColor: theme.secondaryBg,
       borderRadius: 2,
     },
     progressFill: { height: 4, backgroundColor: theme.accent, borderRadius: 2 },
     list: { gap: 8 },
+    categoryWrap: {
+      backgroundColor: theme.elevated,
+      borderRadius: 12,
+      padding: 12,
+    },
+    categoryHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    categoryHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+    categoryIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.accentAlpha15,
+      flexShrink: 0,
+    },
+    categoryMeta: { flex: 1, minWidth: 0 },
+    categoryTitle: {
+      color: theme.textPrimary,
+      fontSize: 14,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+    },
+    categoryCount: {
+      color: theme.textSecondary,
+      fontSize: 11,
+      fontFamily: "Inter_400Regular",
+      marginTop: 2,
+    },
+    categoryHeaderRight: { flexDirection: "row", alignItems: "center", gap: 6 },
+    categoryPercent: {
+      color: theme.accent,
+      fontSize: 12,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+    },
+    categoryTrack: {
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.secondaryBg,
+      marginTop: 10,
+      overflow: "hidden",
+    },
+    categoryFill: { height: 4, borderRadius: 2, backgroundColor: theme.accent },
+    categoryList: { gap: 8, marginTop: 10 },
     achievementCard: {
       flexDirection: "row",
       alignItems: "center",
@@ -192,19 +404,42 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       width: 44,
       height: 44,
       borderRadius: 12,
-      backgroundColor: "rgba(255,255,255,0.04)",
+      backgroundColor: theme.secondaryBg,
       alignItems: "center",
       justifyContent: "center",
     },
     achievementIconUnlocked: { backgroundColor: theme.accentAlpha15 },
     achievementInfo: { flex: 1 },
+    achievementTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
     achievementName: {
       color: theme.textPrimary,
       fontSize: 15,
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
+      flex: 1,
+      minWidth: 0,
     },
     achievementNameLocked: { color: theme.textSecondary },
+    typePill: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: theme.accentAlpha15,
+      flexShrink: 0,
+    },
+    typePillText: {
+      color: theme.accent,
+      fontSize: 9,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+    },
     achievementDesc: {
       color: theme.textSecondary,
       fontSize: 12,
@@ -220,7 +455,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     achievementTrack: {
       flex: 1,
       height: 3,
-      backgroundColor: "rgba(255,255,255,0.08)",
+      backgroundColor: theme.secondaryBg,
       borderRadius: 1.5,
     },
     achievementFill: {

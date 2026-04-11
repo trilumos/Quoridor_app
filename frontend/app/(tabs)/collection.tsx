@@ -1,62 +1,46 @@
 import React, { useMemo } from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getThemeColors } from "../../src/theme/colors";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  ALL_THEME_OPTIONS,
+  getThemeColors,
+  type ThemeName,
+} from "../../src/theme/colors";
 import { useGameContext } from "../../src/storage/GameContext";
 
-const THEMES = [
-  {
-    id: "obsidian",
-    name: "Obsidian Dark",
-    desc: "Default dark theme",
-    active: true,
-  },
-  {
-    id: "walnut",
-    name: "Polished Walnut",
-    desc: "Warm wood-grain aesthetic",
-    active: false,
-  },
-  {
-    id: "marble",
-    name: "Carrara Marble",
-    desc: "Classic Italian stone finish",
-    active: false,
-  },
-  {
-    id: "neon",
-    name: "Neon Circuit",
-    desc: "Cyberpunk grid overlay",
-    active: false,
-  },
-  {
-    id: "frost",
-    name: "Arctic Frost",
-    desc: "Cool blue tonal palette",
-    active: false,
-  },
-  {
-    id: "gold",
-    name: "Royal Gold",
-    desc: "Luxurious gilded surfaces",
-    active: false,
-  },
-];
-
 export default function CollectionScreen() {
-  const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
-  const st = useMemo(
-    () => createStyles(theme, settings.darkMode),
-    [theme, settings.darkMode],
-  );
-  const overlayBase = settings.darkMode ? "#000000" : theme.background;
+  const { settings, updateSettings } = useGameContext();
+  const { width } = useWindowDimensions();
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
+  const st = useMemo(() => createStyles(theme, width), [theme, width]);
+
+  const handleApplyTheme = (id: ThemeName, label: string) => {
+    if (settings.themeName === id) return;
+
+    Alert.alert(
+      "Apply Theme",
+      `Apply ${label} theme?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Apply",
+          onPress: () => {
+            updateSettings({ themeName: id, boardMaterial: label });
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  };
 
   return (
     <SafeAreaView
@@ -82,40 +66,88 @@ export default function CollectionScreen() {
             </View>
             <View style={st.activeThemeContent}>
               <Text style={st.activeLabel}>CURRENTLY ACTIVE</Text>
-              <Text style={st.activeTitle}>OBSIDIAN DARK</Text>
+              <Text style={st.activeTitle}>
+                {ALL_THEME_OPTIONS.find((item) => item.id === settings.themeName)?.label.toUpperCase()}
+              </Text>
               <Text style={st.activeDesc}>
-                The signature board material. Deep contrast with precision grid
-                lines.
+                Switch palettes instantly. Your selection is applied globally and
+                saved on this device.
               </Text>
             </View>
           </View>
 
           {/* Theme Grid */}
           <View style={st.themeGrid}>
-            {THEMES.map((themeItem) => {
+            {ALL_THEME_OPTIONS.map((themeItem) => {
+              const preview = getThemeColors(settings.darkMode, themeItem.id);
+              const isActive = settings.themeName === themeItem.id;
+              const isAnimated = preview.themeType === "animated";
+              const isGradient = preview.themeType === "gradient";
+
+              const previewColors: [string, string, ...string[]] = isAnimated && preview.animation
+                ? [
+                    preview.animation.colors[0] ?? preview.buttonGradientStart,
+                    preview.animation.colors[1] ?? preview.buttonGradientEnd,
+                    ...preview.animation.colors.slice(2),
+                  ]
+                : [preview.buttonGradientStart, preview.buttonGradientEnd];
+
+              // Removed unused variable 'previewTag'
+
               return (
                 <TouchableOpacity
                   key={themeItem.id}
-                  style={[st.themeCard, themeItem.active && st.themeCardActive]}
+                  style={[
+                    st.themeCard,
+                    isActive && st.themeCardActive,
+                    isActive && {
+                      borderColor: preview.borderFocus,
+                      shadowColor: preview.accent,
+                    },
+                  ]}
                   activeOpacity={0.7}
-                  onPress={() => {}}
-                  disabled
+                  onPress={() => handleApplyTheme(themeItem.id, themeItem.label)}
                 >
-                  {themeItem.active && <View style={st.themePinstripe} />}
-                  <View
-                    style={[
-                      st.themePreview,
-                      themeItem.active && { backgroundColor: theme.surface },
-                    ]}
+                  {isActive && (isGradient ? (
+                    <LinearGradient
+                      colors={[preview.highlightGradientStart, preview.highlightGradientEnd]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={st.themePinstripe}
+                    />
+                  ) : (
+                    <View style={[st.themePinstripe, { backgroundColor: preview.accent }]} />
+                  ))}
+                  <LinearGradient
+                    colors={previewColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={st.themePreview}
                   >
-                    <View style={st.themeGridLines}>
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <View key={i} style={st.themeGridLine} />
-                      ))}
+                    {/* Removed previewTag (gradient/animated/static) */}
+                    <View style={st.previewRow}>
+                      <View
+                        style={[
+                          st.previewSwatch,
+                          { backgroundColor: preview.background },
+                        ]}
+                      />
+                      <View
+                        style={[
+                          st.previewSwatch,
+                          { backgroundColor: preview.elevated },
+                        ]}
+                      />
+                      <View
+                        style={[
+                          st.previewSwatch,
+                          { backgroundColor: preview.accent },
+                        ]}
+                      />
                     </View>
-                  </View>
-                  <Text style={st.themeName}>{themeItem.name}</Text>
-                  <Text style={st.themeDesc}>{themeItem.desc}</Text>
+                  </LinearGradient>
+                  <Text style={st.themeName}>{themeItem.label}</Text>
+                  <Text style={st.themeDesc}>Tap to apply instantly</Text>
                 </TouchableOpacity>
               );
             })}
@@ -123,60 +155,15 @@ export default function CollectionScreen() {
 
           <View style={{ height: 24 }} />
         </ScrollView>
-
-        <View style={st.lockedOverlay}>
-          <View pointerEvents="none" style={st.lockedFadeTop}>
-            {FADE_STOPS.map((alpha, i) => (
-              <View
-                key={i}
-                style={[
-                  st.lockedFadeBand,
-                  { backgroundColor: withAlpha(overlayBase, alpha) },
-                ]}
-              />
-            ))}
-          </View>
-          <View style={st.lockedCard}>
-            <Text style={st.lockedEyebrow}>THEME MARKET</Text>
-            <Text style={st.lockedTitle}>COMING SOON</Text>
-            <Text style={st.lockedDesc}>
-              You are seeing a preview of the upcoming themes experience.
-              Unlocks, packs, and activation controls will land in a future update.
-            </Text>
-          </View>
-        </View>
       </View>
     </SafeAreaView>
   );
 }
 
-const FADE_STOPS = [0.08, 0.16, 0.26, 0.4, 0.58, 0.76, 0.9, 1];
+const createStyles = (theme: ReturnType<typeof getThemeColors>, screenWidth: number) => {
+  const isCompact = screenWidth < 360;
 
-function withAlpha(hex: string, alpha: number): string {
-  const cleaned = hex.replace("#", "");
-  if (!(cleaned.length === 3 || cleaned.length === 6)) {
-    return `rgba(0,0,0,${alpha})`;
-  }
-
-  const full =
-    cleaned.length === 3
-      ? cleaned
-          .split("")
-          .map((ch) => ch + ch)
-          .join("")
-      : cleaned;
-
-  const r = Number.parseInt(full.slice(0, 2), 16);
-  const g = Number.parseInt(full.slice(2, 4), 16);
-  const b = Number.parseInt(full.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-const createStyles = (
-  theme: ReturnType<typeof getThemeColors>,
-  darkMode: boolean,
-) =>
-  StyleSheet.create({
+  return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     pageWrap: { flex: 1 },
     scroll: { paddingHorizontal: 20 },
@@ -240,18 +227,28 @@ const createStyles = (
     themeGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 12,
+      justifyContent: "space-between",
+      rowGap: 12,
       marginTop: 20,
     },
     themeCard: {
-      width: "47%",
+      width: isCompact ? "100%" : "48.5%",
       backgroundColor: theme.elevated,
       borderRadius: 12,
       padding: 14,
       overflow: "hidden",
       position: "relative",
+      borderWidth: 1,
+      borderColor: "transparent",
     },
-    themeCardActive: {},
+    themeCardActive: {
+      borderColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.2,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 4,
+    },
     themePinstripe: {
       position: "absolute",
       left: 0,
@@ -261,16 +258,44 @@ const createStyles = (
       backgroundColor: theme.accent,
     },
     themePreview: {
-      height: 60,
-      backgroundColor: theme.surfaceLowest,
+      height: 74,
       borderRadius: 8,
       marginBottom: 10,
       overflow: "hidden",
       justifyContent: "center",
-      alignItems: "center",
+      paddingHorizontal: 8,
+      paddingVertical: 8,
     },
-    themeGridLines: { flexDirection: "row", gap: 6, opacity: 0.2 },
-    themeGridLine: { width: 2, height: 40, backgroundColor: theme.textPrimary },
+    previewMetaRow: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      marginBottom: 6,
+    },
+    previewTag: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    previewTagText: {
+      fontSize: 9,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      letterSpacing: 1,
+    },
+    previewRow: {
+      flexDirection: "row",
+      gap: 8,
+      alignItems: "center",
+      justifyContent: "space-between",
+      flex: 1,
+    },
+    previewSwatch: {
+      flex: 1,
+      borderRadius: 6,
+      height: 40,
+    },
     themeName: {
       color: theme.textPrimary,
       fontSize: 13,
@@ -283,61 +308,5 @@ const createStyles = (
       fontFamily: "Inter_400Regular",
       marginTop: 2,
     },
-    lockedOverlay: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: "50%",
-      backgroundColor: darkMode ? "#000000" : theme.background,
-      justifyContent: "flex-start",
-      alignItems: "center",
-      paddingHorizontal: 24,
-      paddingTop: 26,
-      borderTopWidth: 1,
-      borderColor: theme.border,
-    },
-    lockedFadeTop: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      top: -28,
-      height: 28,
-    },
-    lockedFadeBand: {
-      flex: 1,
-    },
-    lockedCard: {
-      width: "100%",
-      maxWidth: 420,
-      borderRadius: 16,
-      backgroundColor: theme.elevated,
-      borderWidth: 1,
-      borderColor: theme.borderFocus,
-      paddingHorizontal: 18,
-      paddingVertical: 16,
-      alignItems: "center",
-    },
-    lockedEyebrow: {
-      color: theme.accent,
-      fontSize: 10,
-      fontFamily: "Inter_700Bold",
-      fontWeight: "700",
-      letterSpacing: 2,
-    },
-    lockedTitle: {
-      color: theme.textPrimary,
-      fontSize: 26,
-      fontFamily: "Inter_800ExtraBold",
-      fontWeight: "800",
-      marginTop: 6,
-    },
-    lockedDesc: {
-      color: theme.textSecondary,
-      fontSize: 12,
-      fontFamily: "Inter_400Regular",
-      lineHeight: 18,
-      marginTop: 8,
-      textAlign: "center",
-    },
   });
+};

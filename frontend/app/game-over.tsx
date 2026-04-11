@@ -33,6 +33,7 @@ type ExportPayload = {
   startTime: number;
   durationSec: number;
   winner: number | null;
+  winMethod?: "normal" | "time";
   players: [PlayerSummary, PlayerSummary];
   timeLimitSec: number;
   moveLog: ExportLogEntry[];
@@ -59,7 +60,7 @@ export default function GameOverScreen() {
   const params = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
 
   const [payload, setPayload] = useState<ExportPayload | null>(null);
@@ -88,6 +89,7 @@ export default function GameOverScreen() {
         startTime: Date.now(),
         durationSec: Number(params.time || 0),
         winner: Number.isNaN(fallbackWinner) ? null : fallbackWinner,
+        winMethod: (params.winMethod as "normal" | "time") || "normal",
         players: [
           {
             index: 0,
@@ -119,9 +121,11 @@ export default function GameOverScreen() {
   }, [params]);
 
   const winnerName = useMemo(() => {
-    if (!payload || payload.winner === null) return "DRAW";
-    return payload.players[payload.winner]?.name || "WINNER";
+    if (!payload) return "PLAYER 1";
+    return payload.players[payload.winner ?? 0]?.name || "WINNER";
   }, [payload]);
+
+  const isTimeWin = payload?.winMethod === "time";
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -158,17 +162,18 @@ export default function GameOverScreen() {
           <head>
             <meta charset="utf-8" />
             <style>
-              body { font-family: Arial, sans-serif; color: #111; padding: 24px; }
+              body { font-family: Arial, sans-serif; color: ${theme.textPrimary}; padding: 24px; }
               h1 { margin: 0 0 6px 0; font-size: 22px; }
               p { margin: 4px 0; font-size: 12px; }
               table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-              th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; text-align: left; }
-              th { background: #f5f5f5; }
+              th, td { border: 1px solid ${theme.border}; padding: 8px; font-size: 12px; text-align: left; }
+              th { background: ${theme.secondaryBg}; }
             </style>
           </head>
           <body>
             <h1>Quoridor Match Export</h1>
             <p><strong>Winner:</strong> ${escapeHtml(winnerName)}</p>
+            <p><strong>Win Method:</strong> ${payload.winMethod === "time" ? "Won on time" : "Normal finish"}</p>
             <p><strong>Mode:</strong> ${escapeHtml(payload.mode)}</p>
             <p><strong>Players:</strong> ${escapeHtml(payload.players[0].name)} vs ${escapeHtml(payload.players[1].name)}</p>
             <p><strong>Duration:</strong> ${payload.durationSec}s</p>
@@ -224,11 +229,18 @@ export default function GameOverScreen() {
     <SafeAreaView style={st.container}>
       <View style={st.wrap}>
         <Text style={st.title}>GAME OVER</Text>
-        <Text style={st.winner}>{winnerName} WINS</Text>
-        <Text style={st.meta}>
+        <Text style={st.winner} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+          {winnerName} {isTimeWin ? "WINS ON TIME" : "WINS"}
+        </Text>
+        <Text style={st.meta} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
           TIME TAKEN: {formatClock(payload.durationSec)}
         </Text>
-        <Text style={st.meta}>
+        {isTimeWin && (
+          <Text style={st.timeWinNote} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+            The losing player ran out of time.
+          </Text>
+        )}
+        <Text style={st.meta} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
           TIME CONTROL:{" "}
           {payload.timeLimitSec > 0
             ? `${payload.timeLimitSec / 60} MIN`
@@ -241,7 +253,12 @@ export default function GameOverScreen() {
             onPress={() => handleTabPress(0)}
             activeOpacity={0.8}
           >
-            <Text style={[st.tabText, activeTab === 0 && st.tabTextActive]}>
+            <Text
+              style={[st.tabText, activeTab === 0 && st.tabTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+            >
               {payload.players[0].name}
             </Text>
           </TouchableOpacity>
@@ -250,7 +267,12 @@ export default function GameOverScreen() {
             onPress={() => handleTabPress(1)}
             activeOpacity={0.8}
           >
-            <Text style={[st.tabText, activeTab === 1 && st.tabTextActive]}>
+            <Text
+              style={[st.tabText, activeTab === 1 && st.tabTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+            >
               {payload.players[1].name}
             </Text>
           </TouchableOpacity>
@@ -275,22 +297,24 @@ export default function GameOverScreen() {
         >
           {payload.players.map((p, i) => (
             <View key={p.index} style={[st.statCard, { width: width - 32 }]}>
-              <Text style={st.cardTitle}>PLAYER {i + 1} STATS</Text>
+              <Text style={st.cardTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                PLAYER {i + 1} STATS
+              </Text>
               <View style={st.statRow}>
-                <Text style={st.statLabel}>Moves</Text>
-                <Text style={st.statValue}>{p.moves}</Text>
+                <Text style={st.statLabel} numberOfLines={1}>Moves</Text>
+                <Text style={st.statValue} numberOfLines={1}>{p.moves}</Text>
               </View>
               <View style={st.statRow}>
-                <Text style={st.statLabel}>Walls Placed</Text>
-                <Text style={st.statValue}>{p.wallsPlaced}</Text>
+                <Text style={st.statLabel} numberOfLines={1}>Walls Placed</Text>
+                <Text style={st.statValue} numberOfLines={1}>{p.wallsPlaced}</Text>
               </View>
               <View style={st.statRow}>
-                <Text style={st.statLabel}>Walls Remaining</Text>
-                <Text style={st.statValue}>{p.wallsRemaining}</Text>
+                <Text style={st.statLabel} numberOfLines={1}>Walls Remaining</Text>
+                <Text style={st.statValue} numberOfLines={1}>{p.wallsRemaining}</Text>
               </View>
               <View style={st.statRow}>
-                <Text style={st.statLabel}>Clock</Text>
-                <Text style={st.statValue}>
+                <Text style={st.statLabel} numberOfLines={1}>Clock</Text>
+                <Text style={st.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {payload.timeLimitSec > 0
                     ? formatClock(p.timeRemainingSec || 0)
                     : "Unlimited"}
@@ -335,6 +359,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontWeight: "800",
       letterSpacing: 2,
       textAlign: "center",
+      flexShrink: 1,
     },
     winner: {
       marginTop: 10,
@@ -343,6 +368,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontFamily: "Inter_800ExtraBold",
       fontWeight: "800",
       textAlign: "center",
+      flexShrink: 1,
     },
     meta: {
       marginTop: 6,
@@ -352,6 +378,17 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontWeight: "700",
       textAlign: "center",
       letterSpacing: 1,
+      flexShrink: 1,
+    },
+    timeWinNote: {
+      marginTop: 8,
+      color: theme.accent,
+      fontSize: 12,
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700",
+      textAlign: "center",
+      letterSpacing: 0.5,
+      flexShrink: 1,
     },
     tabRow: {
       marginTop: 18,
@@ -369,6 +406,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
       letterSpacing: 0.8,
+      flexShrink: 1,
     },
     tabTextActive: { color: theme.accent },
     tabIndicator: {
@@ -377,7 +415,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       top: 4,
       bottom: 4,
       borderRadius: 8,
-      backgroundColor: "rgba(255,122,0,0.12)",
+      backgroundColor: theme.accentAlpha15,
     },
     statsPager: { marginTop: 14, marginBottom: 18 },
     statCard: {
@@ -393,6 +431,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontWeight: "800",
       letterSpacing: 1,
       marginBottom: 10,
+      flexShrink: 1,
     },
     statRow: {
       flexDirection: "row",
@@ -405,12 +444,15 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
       letterSpacing: 0.7,
+      flexShrink: 1,
     },
     statValue: {
       color: theme.textPrimary,
       fontSize: 14,
       fontFamily: "Inter_700Bold",
       fontWeight: "700",
+      flexShrink: 1,
+      textAlign: "right",
     },
     homeBtn: {
       marginTop: 12,

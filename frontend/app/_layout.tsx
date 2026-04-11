@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
@@ -19,6 +19,10 @@ import { useAuthStore } from "../src/store/authStore";
 import { useStatsStore } from "../src/store/statsStore";
 import { useGameStore } from "../src/store/gameStore";
 import { getThemeColors } from "../src/theme/colors";
+import AchievementToast from "../src/components/AchievementToast";
+import ThemedBackground from "../src/components/ThemedBackground";
+import { initializeAds } from "../src/lib/ads";
+
 
 SplashScreen.preventAutoHideAsync();
 
@@ -61,13 +65,7 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
-  });
-
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
+  })
 
   if (!fontsLoaded) return null;
 
@@ -76,16 +74,36 @@ export default function RootLayout() {
       <GameProvider>
         <SafeAreaProvider>
           <StoreInitializer />
-          <AppNavigator />
+          <AppContent />
         </SafeAreaProvider>
       </GameProvider>
     </AuthProvider>
   );
 }
 
+function AppContent() {
+  const { loaded } = useGameContext();
+
+  useEffect(() => {
+    if (loaded) {
+      initializeAds();
+      SplashScreen.hideAsync();
+    }
+  }, [loaded]);
+
+  if (!loaded) return null;
+
+  return (
+    <>
+      <AppNavigator />
+      <AchievementToastHost />
+    </>
+  );
+}
+
 function AppNavigator() {
   const { settings } = useGameContext();
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -128,6 +146,7 @@ function AppNavigator() {
 
   return (
     <>
+      <ThemedBackground theme={theme} />
       <StatusBar
         style={settings.darkMode ? "light" : "dark"}
         backgroundColor={theme.background}
@@ -137,7 +156,7 @@ function AppNavigator() {
         screenOptions={{
           headerShown: false,
           animation: "fade",
-          contentStyle: { backgroundColor: theme.background },
+          contentStyle: { backgroundColor: "transparent" },
         }}
       >
         <Stack.Screen name="index" />
@@ -156,10 +175,44 @@ function AppNavigator() {
         <Stack.Screen name="edit-profile" />
         <Stack.Screen name="subscription" />
         <Stack.Screen name="ad-interstitial" />
-        <Stack.Screen name="daily-puzzle" />
         <Stack.Screen name="game-over" />
         <Stack.Screen name="match-result" />
       </Stack>
     </>
   );
+}
+
+function AchievementToastHost() {
+  const {
+    homeAchievementQueue,
+    resultAchievementQueue,
+    clearAchievementQueue,
+  } = useGameContext();
+  const pathname = usePathname();
+
+  const isHomeScreen =
+    pathname === "/" || pathname === "/(tabs)" || pathname === "/index";
+  const isResultScreen = ["/victory", "/defeat", "/game-over", "/match-result"].includes(
+    pathname,
+  );
+
+  if (isHomeScreen && homeAchievementQueue.length > 0) {
+    return (
+      <AchievementToast
+        queue={homeAchievementQueue}
+        onComplete={() => clearAchievementQueue("home")}
+      />
+    );
+  }
+
+  if (isResultScreen && resultAchievementQueue.length > 0) {
+    return (
+      <AchievementToast
+        queue={resultAchievementQueue}
+        onComplete={() => clearAchievementQueue("result")}
+      />
+    );
+  }
+
+  return null;
 }

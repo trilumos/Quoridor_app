@@ -33,7 +33,7 @@ export default function EditProfileScreen() {
   const [saved, setSaved] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [showAvatarViewer, setShowAvatarViewer] = useState(false);
-  const theme = getThemeColors(settings.darkMode);
+  const theme = getThemeColors(settings.darkMode, settings.themeName);
   const st = useMemo(() => createStyles(theme), [theme]);
   const hasName = displayName.trim().length > 0;
 
@@ -335,7 +335,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       paddingHorizontal: 20,
       paddingVertical: 24,
       borderWidth: 1,
-      borderColor: "rgba(233, 106, 0, 0.34)",
+      borderColor: theme.borderFocus,
     },
     firstRunEyebrow: {
       color: theme.accent,
@@ -388,7 +388,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       justifyContent: "center",
       marginBottom: 12,
       borderWidth: 2,
-      borderColor: "rgba(233, 106, 0, 0.55)",
+      borderColor: theme.borderFocus,
       overflow: "hidden",
     },
     avatarImage: { width: 74, height: 74, borderRadius: 37 },
@@ -470,7 +470,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
     },
     avatarModalBackdrop: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.72)",
+      backgroundColor: theme.overlayGlass,
       alignItems: "center",
       justifyContent: "center",
       padding: 24,
@@ -505,7 +505,7 @@ const createStyles = (theme: ReturnType<typeof getThemeColors>) =>
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 2,
-      borderColor: "rgba(233, 106, 0, 0.45)",
+      borderColor: theme.accentAlpha40,
     },
     avatarModalImage: { width: "100%", height: "100%" },
     avatarModalPrimaryBtn: {
