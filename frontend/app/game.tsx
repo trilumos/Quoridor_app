@@ -14,7 +14,9 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { showInterstitial } from "../src/lib/ads";
+import { useFocusEffect } from "@react-navigation/native";
+import { showRewarded } from "../src/lib/ads";
+import { AdManager } from "../src/lib/ADManager";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
@@ -204,6 +206,46 @@ export default function GameScreen() {
 
   const isTimedLocal = mode === "local" && localTimeSec > 0;
 
+  useFocusEffect(
+  useCallback(() => {
+    if (isPremium) return;
+
+    const isValidEntry =
+      params.adType !== "rewarded_undo" &&
+      params.adType !== "rewarded_continue";
+
+    if (!isValidEntry) return;
+
+    let event: string | null = null;
+
+    // 🤖 AI
+    if (mode === "ai") {
+      if (difficulty === "hard") {
+        event = "GRANDMASTER_START";
+      } else {
+        event = "AI_GAME_START";
+      }
+    }
+
+    // 👥 LOCAL (ONLY unlimited/custom)
+    else if (mode === "local") {
+      if (localTimeSec === 0) {
+        event = "LOCAL_GAME_START";
+      }
+    }
+
+    if (!event) return;
+
+    const shouldShow = AdManager.shouldShowAd({ event });
+
+    if (shouldShow) {
+      AdManager.showInterstitial();
+    }
+
+    AdManager.recordEvent(event);
+
+  }, [isPremium, params.adType, mode, difficulty, localTimeSec])
+);
   useEffect(() => {
     if (params.adType === "rewarded_undo") {
       const restoreAndApplyRewardedUndo = async () => {
@@ -431,8 +473,6 @@ export default function GameScreen() {
             difficulty,
           );
         else recordLoss(10 - gameState.players[0].wallsRemaining);
-        incrementAdCounter();
-        incrementMatchCount();
 
         if (gameState.winner !== 0) {
           const undoSteps = Number(params.undoMoves || 5);
@@ -573,17 +613,20 @@ export default function GameScreen() {
             ? "/defeat"
             : "/victory";
 
-        const showAd = !isPremium && (
-          shouldShowAd() || storeShowAd(isPremium)
-        );
+        // --- CENTRALIZED AD LOGIC ---
+        let shouldShow = false;
+
+        if (!isPremium) {
+          shouldShow = AdManager.shouldShowAd({
+            event: mode === "local" ? "LOCAL_GAME_END" : "AI_GAME_END",
+          });
+        }
 
         if ((mode as GameMode) === "local") {
           void saveLocalGameExport();
-          // Always show ad after every Pass & Play game
-          // unless premium
+
           if (!isPremium) {
-            showInterstitial(() => {
-              if (!destination) return;
+            AdManager.showInterstitial(() => {
               router.replace({
                 pathname: "/game-over",
                 params: endParams,
@@ -595,23 +638,27 @@ export default function GameScreen() {
               params: endParams,
             } as never);
           }
+
+          AdManager.recordEvent("LOCAL_GAME_END");
           return;
         }
 
-        // For AI games: show ad every 2 games
-        if (showAd) {
-          showInterstitial(() => {
-            if (!destination) return;
+        if (shouldShow) {
+          AdManager.showInterstitial(() => {
             router.replace({
               pathname: destination,
               params: endParams,
             } as never);
           });
+
+          AdManager.recordEvent("AI_GAME_END");
         } else {
           router.replace({
             pathname: destination,
             params: endParams,
           } as never);
+
+          AdManager.recordEvent("AI_GAME_END");
         }
       }, 1500);
     }
@@ -624,8 +671,6 @@ export default function GameScreen() {
     gameState.startTime,
     gameState.wallsPlaced,
     gameState.winner,
-    incrementAdCounter,
-    incrementMatchCount,
     isPremium,
     localTimeSec,
     mode,
@@ -639,11 +684,9 @@ export default function GameScreen() {
     recordWin,
     remainingSeconds,
     router,
-    shouldShowAd,
     queueAchievementUnlocks,
     stateHistory,
     stats,
-    storeShowAd,
     user,
     gameState,
   ]);
@@ -755,35 +798,41 @@ export default function GameScreen() {
       return;
     }
 
-    const allowedByReward = rewardedUndoAvailable;
-    if (!canUseUndo() && !allowedByReward) {
-      const openRewardedUndo = async () => {
-        rewardedUndoConsumedRef.current = false;
-        const rewardToken = `${Date.now()}_${Math.random()}`;
-        await StorageService.set(StorageService.KEYS.REWARDED_UNDO_STATE, {
-          rewardToken,
-          gameState,
-          stateHistory,
-        });
+    // In AI mode, only the first undo is free, all others require rewarded ad
+    if (mode === "ai") {
+      const allowedByReward = rewardedUndoAvailable;
+      // Only allow free undo if undosUsedThisGame < 1 (from canUseUndo)
+      if (!canUseUndo() && !allowedByReward) {
+        // Show rewarded ad for every undo after the first
+        const openRewardedUndo = async () => {
+          rewardedUndoConsumedRef.current = false;
+          const rewardToken = `${Date.now()}_${Math.random()}`;
+          await StorageService.set(StorageService.KEYS.REWARDED_UNDO_STATE, {
+            rewardToken,
+            gameState,
+            stateHistory,
+          });
 
-        showInterstitial(() => {
+          // Show rewarded ad (not interstitial)
           
-          router.replace({
-            pathname: "/game",
-            params: {
-              adType: "rewarded_undo",
-              mode,
-              difficulty,
-              p1Name,
-              p2Name,
-              rewardToken,
-            },
-          } as never);
-        });
-      };
+            showRewarded(() => {
+              router.replace({
+                pathname: "/game",
+                params: {
+                  adType: "rewarded_undo",
+                  mode,
+                  difficulty,
+                  p1Name,
+                  p2Name,
+                  rewardToken,
+                },
+              } as never);
+            });
+        };
 
-      void openRewardedUndo();
-      return;
+        void openRewardedUndo();
+        return;
+      }
     }
 
     let popCount = 1;
@@ -800,7 +849,7 @@ export default function GameScreen() {
     setWallPreview(null);
     setActionMode("move");
 
-    if (allowedByReward) {
+    if (rewardedUndoAvailable) {
       setRewardedUndoAvailable(false);
     } else if (!isPremium) {
       consumeUndo();
@@ -1345,17 +1394,29 @@ export default function GameScreen() {
               </View>
             )}
 
-            {mode === "ai" && !gameState.gameOver && (
-              <View style={st.undoBar}>
-                <TouchableOpacity
-                  style={st.undoBtn}
-                  onPress={handleUndo}
-                  activeOpacity={0.85}
-                >
-                  <Text style={st.undoBtnText}>UNDO LAST MOVE</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            {mode === "ai" && !gameState.gameOver && stateHistory.length > 0 && (
+  <View style={st.undoBar}>
+    <TouchableOpacity
+      style={[
+        st.undoBtn,
+        !canUseUndo() && !isPremium && st.undoBtnAd,
+      ]}
+      onPress={handleUndo}
+      activeOpacity={0.85}
+    >
+      <Text style={[
+        st.undoBtnText,
+        !canUseUndo() && !isPremium && st.undoBtnTextAd,
+      ]}>
+        {isPremium
+          ? "UNDO LAST MOVE"
+          : canUseUndo()
+            ? "UNDO LAST MOVE  (1 FREE)"
+            : "UNDO  —  WATCH AD"}
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
           </View>
         </ScrollView>
 
@@ -1644,6 +1705,13 @@ const createStyles = (
       fontWeight: "700",
       letterSpacing: 0.8,
     },
+    undoBtnAd: {
+  borderColor: theme.textSecondary,
+  backgroundColor: theme.elevated,
+},
+undoBtnTextAd: {
+  color: theme.textSecondary,
+},
     toast: {
       position: "absolute",
       left: 20,

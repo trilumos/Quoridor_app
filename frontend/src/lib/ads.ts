@@ -1,5 +1,9 @@
 import mobileAds, {
   MaxAdContentRating,
+  InterstitialAd,
+  RewardedAd,
+  AdEventType,
+  RewardedAdEventType,
 } from 'react-native-google-mobile-ads';
 
 const IS_TESTING = true;
@@ -14,6 +18,8 @@ export const AD_UNIT_IDS = {
     : 'ca-app-pub-4447692643301149/8262924000',
 };
 
+/* ================= INIT ================= */
+
 export async function initializeAds() {
   try {
     await mobileAds().setRequestConfiguration({
@@ -25,22 +31,22 @@ export async function initializeAds() {
     });
 
     await mobileAds().initialize();
-    loadInterstitial(); 
+
+    // 🔥 Preload ads
+    loadInterstitial();
+    loadRewarded();
+
     console.log('AdMob initialized successfully');
   } catch (error) {
     console.log('AdMob init error:', error);
   }
 }
 
-import {
-  InterstitialAd,
-  AdEventType,
-} from 'react-native-google-mobile-ads';
+/* ================= INTERSTITIAL ================= */
 
 let interstitial: InterstitialAd | null = null;
-let lastAdTime = 0;
-
 let isInterstitialLoaded = false;
+
 export function loadInterstitial() {
   interstitial = InterstitialAd.createForAdRequest(
     AD_UNIT_IDS.interstitial
@@ -62,16 +68,17 @@ export function loadInterstitial() {
 }
 
 export function showInterstitial(onClose?: () => void) {
-  const now = Date.now();
 
-  // ⏱️ Cooldown: 60 seconds
-  if (now - lastAdTime < 60000) {
+  if (!interstitial) {
     onClose?.();
     return;
   }
 
-  if (!interstitial) {
-    onClose?.(); // fallback if not initialized
+  // 🔥 If not ready → reload and skip
+  if (!isInterstitialLoaded) {
+    console.log("Ad not ready → loading now");
+    loadInterstitial();
+    onClose?.();
     return;
   }
 
@@ -79,23 +86,95 @@ export function showInterstitial(onClose?: () => void) {
     AdEventType.CLOSED,
     () => {
       unsubscribe();
-      loadInterstitial(); // preload next ad
-      lastAdTime = Date.now(); // 👈 UPDATE TIME HERE
+
+      // 🔥 Preload next ad
+      loadInterstitial();
+
       onClose?.();
     }
   );
 
-  if (!isInterstitialLoaded) {
-  console.log("Ad not ready, skipping");
-  onClose?.();
-  return;
+  try {
+    interstitial.show();
+    isInterstitialLoaded = false;
+  } catch (e) {
+    console.log("Ad failed, reloading:", e);
+
+    loadInterstitial(); // 🔥 critical fallback
+
+    onClose?.();
+  }
 }
 
-try {
-  interstitial.show();
-  isInterstitialLoaded = false; // reset after showing
-} catch (e) {
-    console.log("Ad not ready, skipping:", e);
-    onClose?.(); // fallback if ad fails
+/* ================= REWARDED ================= */
+
+let rewarded: RewardedAd | null = null;
+let isRewardedLoaded = false;
+
+export function loadRewarded() {
+  rewarded = RewardedAd.createForAdRequest(
+    AD_UNIT_IDS.rewarded
+  );
+
+  isRewardedLoaded = false;
+
+  rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
+    console.log("Rewarded loaded");
+    isRewardedLoaded = true;
+  });
+
+  rewarded.addAdEventListener(AdEventType.ERROR, (error) => {
+    console.log("Rewarded failed to load", error);
+    isRewardedLoaded = false;
+  });
+
+  rewarded.load();
+}
+
+export function showRewarded(onComplete?: () => void) {
+  if (!rewarded || !isRewardedLoaded) {
+    console.log("Rewarded not ready → loading for next time");
+    loadRewarded();
+    // Give reward anyway if ad not available
+    // Better UX than blocking the user
+    onComplete?.();
+    return;
+  }
+
+  const unsubscribeReward = rewarded.addAdEventListener(
+    RewardedAdEventType.EARNED_REWARD,
+    () => {
+      console.log("User earned reward");
+      unsubscribeReward();
+    }
+  );
+
+  const unsubscribeClose = rewarded.addAdEventListener(
+    AdEventType.CLOSED,
+    () => {
+      console.log("Rewarded ad closed");
+      unsubscribeClose();
+      loadRewarded();
+      onComplete?.();
+    }
+  );
+
+  const unsubscribeError = rewarded.addAdEventListener(
+    AdEventType.ERROR,
+    (error: any) => {
+      console.log("Rewarded show error:", error);
+      unsubscribeError();
+      loadRewarded();
+      onComplete?.();
+    }
+  );
+
+  try {
+    rewarded.show();
+    isRewardedLoaded = false;
+  } catch (e) {
+    console.log("Rewarded show failed:", e);
+    loadRewarded();
+    onComplete?.();
   }
 }

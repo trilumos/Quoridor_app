@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { showInterstitial } from "../src/lib/ads";
+import { StorageService, KEYS } from "../src/storage/StorageService";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { getThemeColors } from "../src/theme/colors";
@@ -88,6 +89,18 @@ export default function PregameAI() {
 
     const gameParams = buildGameParams(selected);
 
+    // 2-hour ad logic
+    if (!isPremium) {
+      const lastAdTimestamp = await StorageService.get<number>(KEYS.LAST_AD_TIMESTAMP);
+      const now = Date.now();
+      if (!lastAdTimestamp || now - lastAdTimestamp > 2 * 60 * 60 * 1000) {
+        showInterstitial(async () => {
+          await StorageService.set(KEYS.LAST_AD_TIMESTAMP, Date.now());
+          router.push(gameParams as never);
+        });
+        return;
+      }
+    }
 
     if (!isPremium && (selected === "hard" || !hasPlayedInLast24Hours())) {
       showInterstitial(() => {

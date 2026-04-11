@@ -18,7 +18,9 @@ const KEYS = {
   DAILY_PUZZLE: "@quoridor_daily_puzzle",
   LAST_GAME_EXPORT: "@quoridor_last_game_export",
   USERNAME_PROMPT_SEEN: "@quoridor_username_prompt_seen",
+  LAST_AD_TIMESTAMP: "@quoridor_last_ad_timestamp",
 };
+export { KEYS };
 
 const CURRENT_APP_DATA_VERSION = "5";
 

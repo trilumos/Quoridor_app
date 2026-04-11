@@ -117,21 +117,23 @@ export default function DefeatScreen() {
               <TouchableOpacity
                 style={styles.rewardedBtn}
                 onPress={() => {
-                  showInterstitial(() => {
-                    router.replace({
-                      pathname: "/game",
-                      params: {
-                        adType: "rewarded_continue",
-                        mode: "ai",
-                        difficulty,
-                        p1Name,
-                        p2Name,
-                        p1Color,
-                        p2Color,
-                        undoMoves: "5",
-                        resume: "false",
-                      },
-                    } as never);
+                  import("../src/lib/ads").then(({ showRewarded }) => {
+                    showRewarded(() => {
+                      router.replace({
+                        pathname: "/game",
+                        params: {
+                          adType: "rewarded_continue",
+                          mode: "ai",
+                          difficulty,
+                          p1Name,
+                          p2Name,
+                          p1Color,
+                          p2Color,
+                          undoMoves: "5",
+                          resume: "false",
+                        },
+                      } as never);
+                    });
                   });
                 }}
                 activeOpacity={0.8}
