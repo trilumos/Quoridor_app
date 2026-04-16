@@ -66,7 +66,8 @@
         {
           "androidAppId": "ca-app-pub-4447692643301149~7670516774"
         }
-      ]
+      ],
+      "react-native-iap"
     ],
     "experiments": {
       "typedRoutes": true
@@ -74,10 +75,10 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "4d4af98a-2514-4485-9a1a-36b89656bfd0"
+        "projectId": "a6ed0684-e7e1-44f6-8127-47b2951ef223"
       }
     },
-    "owner": "deepkakadiya25s-organization",
+    "owner": "trilumos27s-organization",
     "updates": {
       "url": "https://u.expo.dev/980de41e-3dc5-4979-9f40-e56b74ba3b78"
     }

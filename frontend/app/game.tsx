@@ -175,7 +175,7 @@ export default function GameScreen() {
   const [message, setMessage] = useState("");
   const [moveLog, setMoveLog] = useState<LogEntry[]>([]);
   const [stateHistory, setStateHistory] = useState<GameState[]>([]);
-  const [rewardedUndoAvailable, setRewardedUndoAvailable] = useState(false);
+  
   const [localLayoutMode, setLocalLayoutMode] =
     useState<LocalLayoutMode>("flip-turn");
   const [remainingSeconds, setRemainingSeconds] = useState<[number, number]>(
@@ -208,90 +208,63 @@ export default function GameScreen() {
 
   useFocusEffect(
   useCallback(() => {
-    if (isPremium) return;
-
-    const isValidEntry =
-      params.adType !== "rewarded_undo" &&
-      params.adType !== "rewarded_continue";
-
-    if (!isValidEntry) return;
-
-    let event: string | null = null;
-
-    // 🤖 AI
-    if (mode === "ai") {
-      if (difficulty === "hard") {
-        event = "GRANDMASTER_START";
-      } else {
-        event = "AI_GAME_START";
-      }
-    }
-
-    // 👥 LOCAL (ONLY unlimited/custom)
-    else if (mode === "local") {
-      if (localTimeSec === 0) {
-        event = "LOCAL_GAME_START";
-      }
-    }
-
-    if (!event) return;
-
-    const shouldShow = AdManager.shouldShowAd({ event });
-
-    if (shouldShow) {
-      AdManager.showInterstitial();
-    }
-
-    AdManager.recordEvent(event);
-
-  }, [isPremium, params.adType, mode, difficulty, localTimeSec])
+    // Game screen handles NO ads on entry anymore.
+    // Ads on game start are handled by pregame screens
+    // to avoid double-firing.
+    // This effect is intentionally left empty.
+    // Only end-of-game ads are handled here.
+  }, [])
 );
   useEffect(() => {
-    if (params.adType === "rewarded_undo") {
-      const restoreAndApplyRewardedUndo = async () => {
-        setRewardedUndoAvailable(true);
-        if (rewardedUndoConsumedRef.current) return;
-        const rewardToken =
-          typeof params.rewardToken === "string" ? params.rewardToken : null;
-        if (!rewardToken) return;
+  if (params.adType !== "rewarded_undo") return;
 
-        const saved = await StorageService.get<{
-          rewardToken: string;
-          gameState: GameState;
-          stateHistory: GameState[];
-        }>(StorageService.KEYS.REWARDED_UNDO_STATE);
+  const restoreAndApplyRewardedUndo = async () => {
+    if (rewardedUndoConsumedRef.current) return;
+    const rewardToken =
+      typeof params.rewardToken === "string" ? params.rewardToken : null;
+    if (!rewardToken) return;
 
-        if (!saved || saved.rewardToken !== rewardToken) return;
-        if (!saved?.stateHistory?.length) return;
+    const saved = await StorageService.get<{
+      rewardToken: string;
+      gameState: GameState;
+      stateHistory: GameState[];
+      gameId: string;
+    }>(StorageService.KEYS.REWARDED_UNDO_STATE);
 
-        rewardedUndoConsumedRef.current = true;
+    if (!saved || saved.rewardToken !== rewardToken) return;
+    if (!saved?.stateHistory?.length) return;
 
-        let popCount = 1;
-        let previousState = saved.stateHistory[saved.stateHistory.length - 1];
-        if (
-          mode === "ai" &&
-          previousState.currentPlayer === 1 &&
-          saved.stateHistory.length >= 2
-        ) {
-          popCount = 2;
-          previousState = saved.stateHistory[saved.stateHistory.length - 2];
-        }
+    rewardedUndoConsumedRef.current = true;
 
-        setGameState(previousState);
-        setStateHistory(saved.stateHistory.slice(0, -popCount));
-        setSelectedIntersection(null);
-        setWallPreview(null);
-        setActionMode("move");
-        setAiThinking(false);
-        interactionLockRef.current = false;
-        setRewardedUndoAvailable(false);
-
-        await StorageService.clear(StorageService.KEYS.REWARDED_UNDO_STATE);
-      };
-
-      void restoreAndApplyRewardedUndo();
+    // Restore gate so next undo correctly requires another ad
+    if (saved.gameId) {
+      AdManager.restoreUndoGate(saved.gameId);
     }
-  }, [mode, params.adType, params.rewardToken]);
+
+    let popCount = 1;
+    let previousState = saved.stateHistory[saved.stateHistory.length - 1];
+    if (
+      mode === "ai" &&
+      previousState.currentPlayer === 1 &&
+      saved.stateHistory.length >= 2
+    ) {
+      popCount = 2;
+      previousState = saved.stateHistory[saved.stateHistory.length - 2];
+    }
+
+    setGameState(previousState);
+    setStateHistory(saved.stateHistory.slice(0, -popCount));
+    setSelectedIntersection(null);
+    setWallPreview(null);
+    setActionMode("move");
+    setAiThinking(false);
+    interactionLockRef.current = false;
+
+    await StorageService.clear(StorageService.KEYS.REWARDED_UNDO_STATE);
+  };
+
+  void restoreAndApplyRewardedUndo();
+}, [mode, params.adType, params.rewardToken]);
 
   useEffect(() => {
     if (rewardedContinueHydratedRef.current) return;
@@ -363,8 +336,9 @@ export default function GameScreen() {
       adType !== "rewarded_continue";
 
     if (isFreshAiStart) {
-      resetUndoCount();
-    }
+  resetUndoCount();
+  AdManager.resetUndoGate(""); // clear gate for new game
+}
   }, [mode, params.adType, resetUndoCount, shouldResume]);
 
   // Auto-save game state on every change
@@ -793,83 +767,89 @@ export default function GameScreen() {
   }, [wallPreview, gameState, mode, notifyTurnChange, addLog, showToast, pushHistory]);
 
   const handleUndo = useCallback(() => {
-    if (stateHistory.length === 0) {
-      showToast("No moves to undo");
+  if (stateHistory.length === 0) {
+    showToast("No moves to undo");
+    return;
+  }
+
+  if (mode === "ai" && !isPremium) {
+    const gameId = String(gameState.startTime);
+
+    if (!AdManager.canUndoFree(gameId)) {
+      // Free undo already used — require rewarded ad
+      const openRewardedUndo = async () => {
+        rewardedUndoConsumedRef.current = false;
+        const rewardToken = `${Date.now()}_${Math.random()}`;
+        await StorageService.set(StorageService.KEYS.REWARDED_UNDO_STATE, {
+          rewardToken,
+          gameState,
+          stateHistory,
+          gameId, // saved so restore effect can recover the gate
+        });
+
+        if (!AdManager.isOnline()) {
+          showToast("Internet required for undo");
+          return;
+        }
+
+        AdManager.showRewardedUndo(() => {
+          router.replace({
+            pathname: "/game",
+            params: {
+              adType: "rewarded_undo",
+              mode,
+              difficulty,
+              p1Name,
+              p2Name,
+              rewardToken,
+            },
+          } as never);
+        });
+      };
+
+      void openRewardedUndo();
       return;
     }
 
-    // In AI mode, only the first undo is free, all others require rewarded ad
-    if (mode === "ai") {
-      const allowedByReward = rewardedUndoAvailable;
-      // Only allow free undo if undosUsedThisGame < 1 (from canUseUndo)
-      if (!canUseUndo() && !allowedByReward) {
-        // Show rewarded ad for every undo after the first
-        const openRewardedUndo = async () => {
-          rewardedUndoConsumedRef.current = false;
-          const rewardToken = `${Date.now()}_${Math.random()}`;
-          await StorageService.set(StorageService.KEYS.REWARDED_UNDO_STATE, {
-            rewardToken,
-            gameState,
-            stateHistory,
-          });
+    // Free undo — consume it
+    AdManager.consumeFreeUndo(gameId);
+    consumeUndo();
+  }
 
-          // Show rewarded ad (not interstitial)
-          
-            showRewarded(() => {
-              router.replace({
-                pathname: "/game",
-                params: {
-                  adType: "rewarded_undo",
-                  mode,
-                  difficulty,
-                  p1Name,
-                  p2Name,
-                  rewardToken,
-                },
-              } as never);
-            });
-        };
+  // Perform the actual undo
+  let popCount = 1;
+  let previousState = stateHistory[stateHistory.length - 1];
 
-        void openRewardedUndo();
-        return;
-      }
-    }
+  if (
+    mode === "ai" &&
+    previousState.currentPlayer === 1 &&
+    stateHistory.length >= 2
+  ) {
+    popCount = 2;
+    previousState = stateHistory[stateHistory.length - 2];
+  }
 
-    let popCount = 1;
-    let previousState = stateHistory[stateHistory.length - 1];
+  setStateHistory((prev) => prev.slice(0, -popCount));
+  setGameState(previousState);
+  setSelectedIntersection(null);
+  setWallPreview(null);
+  setActionMode("move");
+  setAiThinking(false);
+  interactionLockRef.current = false;
 
-    if (mode === "ai" && previousState.currentPlayer === 1 && stateHistory.length >= 2) {
-      popCount = 2;
-      previousState = stateHistory[stateHistory.length - 2];
-    }
-
-    setStateHistory((prev) => prev.slice(0, -popCount));
-    setGameState(previousState);
-    setSelectedIntersection(null);
-    setWallPreview(null);
-    setActionMode("move");
-
-    if (rewardedUndoAvailable) {
-      setRewardedUndoAvailable(false);
-    } else if (!isPremium) {
-      consumeUndo();
-    }
-
-    void FeedbackService.impact();
-  }, [
-    canUseUndo,
-    difficulty,
-    isPremium,
-    mode,
-    p1Name,
-    p2Name,
-    rewardedUndoAvailable,
-    router,
-    showToast,
-    stateHistory,
-    consumeUndo,
-    gameState,
-  ]);
+  void FeedbackService.impact();
+}, [
+  consumeUndo,
+  difficulty,
+  gameState,
+  isPremium,
+  mode,
+  p1Name,
+  p2Name,
+  router,
+  showToast,
+  stateHistory,
+]);
 
   const cp = gameState.currentPlayer;
   const isHuman = mode === "local" || cp === 0;
@@ -1394,23 +1374,23 @@ export default function GameScreen() {
               </View>
             )}
 
-            {mode === "ai" && !gameState.gameOver && stateHistory.length > 0 && (
+           {mode === "ai" && !gameState.gameOver && stateHistory.length > 0 && (
   <View style={st.undoBar}>
     <TouchableOpacity
       style={[
         st.undoBtn,
-        !canUseUndo() && !isPremium && st.undoBtnAd,
+        !AdManager.canUndoFree(String(gameState.startTime)) && !isPremium && st.undoBtnAd,
       ]}
       onPress={handleUndo}
       activeOpacity={0.85}
     >
       <Text style={[
         st.undoBtnText,
-        !canUseUndo() && !isPremium && st.undoBtnTextAd,
+        !AdManager.canUndoFree(String(gameState.startTime)) && !isPremium && st.undoBtnTextAd,
       ]}>
         {isPremium
           ? "UNDO LAST MOVE"
-          : canUseUndo()
+          : AdManager.canUndoFree(String(gameState.startTime))
             ? "UNDO LAST MOVE  (1 FREE)"
             : "UNDO  —  WATCH AD"}
       </Text>

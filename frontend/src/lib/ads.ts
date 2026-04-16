@@ -31,12 +31,12 @@ export async function initializeAds() {
     });
 
     await mobileAds().initialize();
+    console.log('AdMob initialized successfully');
 
-    // 🔥 Preload ads
+    // Preload both ad types after init
     loadInterstitial();
     loadRewarded();
 
-    console.log('AdMob initialized successfully');
   } catch (error) {
     console.log('AdMob init error:', error);
   }
@@ -46,38 +46,71 @@ export async function initializeAds() {
 
 let interstitial: InterstitialAd | null = null;
 let isInterstitialLoaded = false;
+let interstitialLoadCallbacks: (() => void)[] = [];
 
 export function loadInterstitial() {
   interstitial = InterstitialAd.createForAdRequest(
-    AD_UNIT_IDS.interstitial
+    AD_UNIT_IDS.interstitial,
+    { requestNonPersonalizedAdsOnly: true }
   );
-
   isInterstitialLoaded = false;
 
   interstitial.addAdEventListener(AdEventType.LOADED, () => {
-    console.log("Interstitial loaded");
+    console.log('Interstitial loaded');
     isInterstitialLoaded = true;
+    // Notify anyone waiting for this ad
+    const callbacks = [...interstitialLoadCallbacks];
+    interstitialLoadCallbacks = [];
+    callbacks.forEach(cb => cb());
   });
 
   interstitial.addAdEventListener(AdEventType.ERROR, (error) => {
-    console.log("Interstitial failed to load", error);
+    console.log('Interstitial failed to load:', error);
     isInterstitialLoaded = false;
+    // Clear waiting callbacks — they will get onClose fallback
+    interstitialLoadCallbacks = [];
   });
 
   interstitial.load();
 }
 
 export function showInterstitial(onClose?: () => void) {
-
   if (!interstitial) {
+    console.log('No interstitial instance');
     onClose?.();
     return;
   }
 
-  // 🔥 If not ready → reload and skip
-  if (!isInterstitialLoaded) {
-    console.log("Ad not ready → loading now");
-    loadInterstitial();
+  if (isInterstitialLoaded) {
+    // Ad is ready — show immediately
+    _showLoadedInterstitial(onClose);
+    return;
+  }
+
+  // Ad not ready yet — wait up to 6 seconds for it to load
+  console.log('Interstitial not ready — waiting for load...');
+
+  let waited = false;
+  const timeout = setTimeout(() => {
+    waited = true;
+    // Remove our callback from waiting list
+    interstitialLoadCallbacks = interstitialLoadCallbacks.filter(cb => cb !== onLoad);
+    console.log('Interstitial wait timeout — skipping ad');
+    loadInterstitial(); // reload for next time
+    onClose?.();
+  }, 6000);
+
+  const onLoad = () => {
+    if (waited) return;
+    clearTimeout(timeout);
+    _showLoadedInterstitial(onClose);
+  };
+
+  interstitialLoadCallbacks.push(onLoad);
+}
+
+function _showLoadedInterstitial(onClose?: () => void) {
+  if (!interstitial || !isInterstitialLoaded) {
     onClose?.();
     return;
   }
@@ -86,10 +119,17 @@ export function showInterstitial(onClose?: () => void) {
     AdEventType.CLOSED,
     () => {
       unsubscribe();
+      loadInterstitial(); // preload next
+      onClose?.();
+    }
+  );
 
-      // 🔥 Preload next ad
+  const unsubscribeError = interstitial.addAdEventListener(
+    AdEventType.ERROR,
+    (error) => {
+      console.log('Interstitial show error:', error);
+      unsubscribeError();
       loadInterstitial();
-
       onClose?.();
     }
   );
@@ -98,10 +138,8 @@ export function showInterstitial(onClose?: () => void) {
     interstitial.show();
     isInterstitialLoaded = false;
   } catch (e) {
-    console.log("Ad failed, reloading:", e);
-
-    loadInterstitial(); // 🔥 critical fallback
-
+    console.log('Interstitial show failed:', e);
+    loadInterstitial();
     onClose?.();
   }
 }
@@ -110,33 +148,69 @@ export function showInterstitial(onClose?: () => void) {
 
 let rewarded: RewardedAd | null = null;
 let isRewardedLoaded = false;
+let rewardedLoadCallbacks: (() => void)[] = [];
 
 export function loadRewarded() {
   rewarded = RewardedAd.createForAdRequest(
-    AD_UNIT_IDS.rewarded
+    AD_UNIT_IDS.rewarded,
+    { requestNonPersonalizedAdsOnly: true }
   );
-
   isRewardedLoaded = false;
 
   rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
-    console.log("Rewarded loaded");
+    console.log('Rewarded loaded');
     isRewardedLoaded = true;
+    // Notify anyone waiting
+    const callbacks = [...rewardedLoadCallbacks];
+    rewardedLoadCallbacks = [];
+    callbacks.forEach(cb => cb());
   });
 
   rewarded.addAdEventListener(AdEventType.ERROR, (error) => {
-    console.log("Rewarded failed to load", error);
+    console.log('Rewarded failed to load:', error);
     isRewardedLoaded = false;
+    rewardedLoadCallbacks = [];
   });
 
   rewarded.load();
 }
 
 export function showRewarded(onComplete?: () => void) {
-  if (!rewarded || !isRewardedLoaded) {
-    console.log("Rewarded not ready → loading for next time");
+  if (!rewarded) {
+    console.log('No rewarded instance');
+    onComplete?.();
+    return;
+  }
+
+  if (isRewardedLoaded) {
+    // Ad is ready — show immediately
+    _showLoadedRewarded(onComplete);
+    return;
+  }
+
+  // Ad not ready yet — wait up to 8 seconds
+  console.log('Rewarded not ready — waiting for load...');
+
+  let waited = false;
+  const timeout = setTimeout(() => {
+    waited = true;
+    rewardedLoadCallbacks = rewardedLoadCallbacks.filter(cb => cb !== onLoad);
+    console.log('Rewarded wait timeout — skipping ad');
     loadRewarded();
-    // Give reward anyway if ad not available
-    // Better UX than blocking the user
+    onComplete?.();
+  }, 8000);
+
+  const onLoad = () => {
+    if (waited) return;
+    clearTimeout(timeout);
+    _showLoadedRewarded(onComplete);
+  };
+
+  rewardedLoadCallbacks.push(onLoad);
+}
+
+function _showLoadedRewarded(onComplete?: () => void) {
+  if (!rewarded || !isRewardedLoaded) {
     onComplete?.();
     return;
   }
@@ -144,7 +218,7 @@ export function showRewarded(onComplete?: () => void) {
   const unsubscribeReward = rewarded.addAdEventListener(
     RewardedAdEventType.EARNED_REWARD,
     () => {
-      console.log("User earned reward");
+      console.log('User earned reward');
       unsubscribeReward();
     }
   );
@@ -152,9 +226,9 @@ export function showRewarded(onComplete?: () => void) {
   const unsubscribeClose = rewarded.addAdEventListener(
     AdEventType.CLOSED,
     () => {
-      console.log("Rewarded ad closed");
+      console.log('Rewarded ad closed');
       unsubscribeClose();
-      loadRewarded();
+      loadRewarded(); // preload next
       onComplete?.();
     }
   );
@@ -162,7 +236,7 @@ export function showRewarded(onComplete?: () => void) {
   const unsubscribeError = rewarded.addAdEventListener(
     AdEventType.ERROR,
     (error: any) => {
-      console.log("Rewarded show error:", error);
+      console.log('Rewarded show error:', error);
       unsubscribeError();
       loadRewarded();
       onComplete?.();
@@ -173,7 +247,7 @@ export function showRewarded(onComplete?: () => void) {
     rewarded.show();
     isRewardedLoaded = false;
   } catch (e) {
-    console.log("Rewarded show failed:", e);
+    console.log('Rewarded show failed:', e);
     loadRewarded();
     onComplete?.();
   }

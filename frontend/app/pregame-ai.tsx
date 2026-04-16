@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { showInterstitial } from "../src/lib/ads";
-import { StorageService, KEYS } from "../src/storage/StorageService";
+import { Alert } from "react-native";
+import { AdManager } from "../src/lib/ADManager";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { getThemeColors } from "../src/theme/colors";
@@ -47,7 +47,7 @@ const DIFFICULTIES: {
 export default function PregameAI() {
   const router = useRouter();
   useLocalSearchParams();
-  const { settings, isPremium, hasPlayedInLast24Hours } = useGameContext();
+  const { settings, isPremium } = useGameContext();
   const { profile, user } = useAuthStore();
   const { savedGame, deleteSavedGame } = useGameStore();
   const savedAiGame = savedGame?.mode === "ai" ? savedGame : null;
@@ -82,41 +82,40 @@ export default function PregameAI() {
   });
 
   const handleStart = async () => {
-    if (!selected) return;
-    if (savedAiGame && user?.id) {
-      await deleteSavedGame(user.id);
-    }
+  if (!selected) return;
 
-    const gameParams = buildGameParams(selected);
+  if (selected === "hard" && !AdManager.isOnline()) {
+    Alert.alert(
+      "Internet Required",
+      "Grandmaster mode requires an internet connection.",
+      [{ text: "OK" }]
+    );
+    return;
+  }
 
-    // 2-hour ad logic
-    if (!isPremium) {
-      const lastAdTimestamp = await StorageService.get<number>(KEYS.LAST_AD_TIMESTAMP);
-      const now = Date.now();
-      if (!lastAdTimestamp || now - lastAdTimestamp > 2 * 60 * 60 * 1000) {
-        showInterstitial(async () => {
-          await StorageService.set(KEYS.LAST_AD_TIMESTAMP, Date.now());
-          router.push(gameParams as never);
-        });
-        return;
-      }
-    }
+  if (savedAiGame && user?.id) {
+    await deleteSavedGame(user.id);
+  }
 
-    if (!isPremium && (selected === "hard" || !hasPlayedInLast24Hours())) {
-      showInterstitial(() => {
+  const gameParams = buildGameParams(selected);
+
+  if (!isPremium && selected === "hard") {
+    const shouldShow = AdManager.shouldShowAd({
+      event: "GRANDMASTER_START",
+    });
+    if (shouldShow) {
+      AdManager.showInterstitial(() => {
         router.push({
           pathname: "/game",
-          params: {
-            adType: "session_start",
-            ...gameParams.params,
-          },
+          params: gameParams.params,
         } as never);
       });
       return;
     }
+  }
 
-    router.push(gameParams as never);
-  };
+  router.push(gameParams as never);
+};
 
   return (
     <SafeAreaView style={st.container}>

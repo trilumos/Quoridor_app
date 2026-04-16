@@ -14,8 +14,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { showInterstitial } from "../src/lib/ads";
-import { StorageService, KEYS } from "../src/storage/StorageService";
+import { AdManager } from "../src/lib/ADManager";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getThemeColors } from "../src/theme/colors";
 import { useGameContext } from "../src/storage/GameContext";
@@ -188,46 +187,44 @@ export default function PregameLocal() {
     } as never);
   };
 
-  const startAdThenGame = () => {
-    showInterstitial(() => {
-      router.push({
-        pathname: "/game",
-        params: {
-          adType: "session_start",
-          ...gameParams,
-        },
-      } as never);
+  
+
+  const handleStart = () => {
+  Keyboard.dismiss();
+
+  if (timeMode == null || timeLimitSec == null) {
+    return;
+  }
+
+  const isUnlimitedOrCustom =
+    timeMode === "unlimited" || timeMode === "custom";
+
+  // Unlimited and custom modes require internet (ads can't be skipped)
+  if (isUnlimitedOrCustom && !AdManager.isOnline()) {
+    Alert.alert(
+      "Internet Required",
+      "Unlimited and custom time modes require an internet connection.",
+      [{ text: "OK" }]
+    );
+    return;
+  }
+
+  // Show ad for unlimited and custom modes
+  if (!isPremium && isUnlimitedOrCustom) {
+    const shouldShow = AdManager.shouldShowAd({
+      event: "LOCAL_GAME_START",
     });
-  };
-
-  const handleStart = async () => {
-    Keyboard.dismiss();
-
-    if (timeMode == null || timeLimitSec == null) {
+    if (shouldShow) {
+      AdManager.showInterstitial(() => {
+        startGame();
+      });
       return;
     }
+  }
 
-    // 2-hour ad logic
-    if (!isPremium) {
-      const lastAdTimestamp = await StorageService.get<number>(KEYS.LAST_AD_TIMESTAMP);
-      const now = Date.now();
-      if (!lastAdTimestamp || now - lastAdTimestamp > 2 * 60 * 60 * 1000) {
-        showInterstitial(async () => {
-          await StorageService.set(KEYS.LAST_AD_TIMESTAMP, Date.now());
-          startGame();
-        });
-        return;
-      }
-    }
-
-    // Show ad only for unlimited/custom time mode
-    if (!isPremium && (timeMode === "unlimited" || timeMode === "custom")) {
-      startAdThenGame();
-      return;
-    }
-    // Other time modes: no ad
-    startGame();
-  };
+  // Timed presets (90s, 120s, 150s): no ad, go straight in
+  startGame();
+};
 
   return (
     <SafeAreaView style={styles.container}>
