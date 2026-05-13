@@ -15,17 +15,19 @@
     "production-apk": {
       "environment": "production",
       "distribution": "internal",
+      "channel": "production-apk",
       "android": {
         "buildType": "apk"
       },
-      "channel": "production-apk"
+      "prebuildCommand": "npx expo prebuild --platform android --clean"
     },
     "production": {
       "environment": "production",
       "channel": "production",
       "android": {
         "buildType": "app-bundle"
-      }
+      },
+      "prebuildCommand": "npx expo prebuild --platform android --clean"
     }
   }
 }
