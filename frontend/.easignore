@@ -1,0 +1,10 @@
+node_modules
+.expo
+dist
+.metro-cache
+builds
+*.apk
+*.aab
+*.log
+.git
+.vscode

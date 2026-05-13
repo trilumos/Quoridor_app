@@ -34,14 +34,12 @@ frontend/
 │   ├── pregame-ai.tsx
 │   ├── pregame-local.tsx
 │   ├── settings.tsx
-│   ├── subscription.tsx
 │   ├── trainer.tsx
 │   ├── victory.tsx
 │   └── (tabs)/
 │       ├── _layout.tsx
 │       ├── collection.tsx
 │       ├── index.tsx
-│       ├── me.tsx
 │       ├── rank.tsx
 │       └── settings.tsx
 ├── assets/

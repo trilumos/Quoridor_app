@@ -6,7 +6,7 @@ import mobileAds, {
   RewardedAdEventType,
 } from 'react-native-google-mobile-ads';
 
-const IS_TESTING = true;
+const IS_TESTING = false;
 
 export const AD_UNIT_IDS = {
   interstitial: IS_TESTING

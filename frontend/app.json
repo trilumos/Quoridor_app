@@ -38,6 +38,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/copyAdiRegistration",
       [
         "expo-splash-screen",
         {
@@ -80,7 +81,7 @@
     },
     "owner": "trilumos27s-organization",
     "updates": {
-      "url": "https://u.expo.dev/980de41e-3dc5-4979-9f40-e56b74ba3b78"
+      "url": "https://u.expo.dev/a6ed0684-e7e1-44f6-8127-47b2951ef223"
     }
   }
 }
