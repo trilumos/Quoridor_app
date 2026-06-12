@@ -15,7 +15,7 @@ interface AuthState {
   fetchProfile: () => Promise<void>;
   updateUsername: (username: string) => Promise<boolean>;
   updateAvatar: (avatarUrl: string) => Promise<boolean>;
-  activatePremium: (tier: "monthly" | "annual") => Promise<boolean>;
+  activatePremium: () => Promise<boolean>;
   setPremiumStatus: (enabled: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   reset: () => void;
@@ -109,15 +109,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return ok;
   },
 
-  activatePremium: async (tier: "monthly" | "annual") => {
+  activatePremium: async () => {
     const { user } = get();
     if (!user) return false;
-    const ok = await ProfileService.activatePremium(user.id, tier);
+    const ok = await ProfileService.activatePremium(user.id);
     if (ok) {
       set((state) => ({
         isPremium: true,
         profile: state.profile
-          ? { ...state.profile, is_premium: true, premium_tier: tier }
+          ? { ...state.profile, is_premium: true, premium_tier: "lifetime" as const }
           : null,
       }));
     }
@@ -132,7 +132,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     if (enabled) {
-      await ProfileService.activatePremium(user.id, "monthly");
+      await ProfileService.activatePremium(user.id);
     } else {
       await ProfileService.deactivatePremium(user.id);
     }
@@ -143,8 +143,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ? {
             ...state.profile,
             is_premium: enabled,
-            premium_tier: enabled ? state.profile.premium_tier || "monthly" : null,
-            premium_expires_at: enabled ? state.profile.premium_expires_at : null,
+            premium_tier: enabled ? "lifetime" as const : null,
+            premium_expires_at: null,
           }
         : state.profile,
     }));

@@ -5,8 +5,8 @@ export interface Profile {
   username: string;
   avatar_url: string | null;
   is_premium: boolean;
-  premium_tier: string | null;
-  premium_expires_at: string | null;
+  premium_tier: "lifetime" | null;
+  premium_expires_at: null;
   created_at: string;
 }
 
@@ -31,7 +31,6 @@ export const ProfileService = {
     try {
       const stored = await StorageService.get<Profile>(profileKey(userId));
       if (stored) return stored;
-
       const profile = createDefaultProfile(userId);
       await StorageService.set(profileKey(userId), profile);
       return profile;
@@ -69,40 +68,27 @@ export const ProfileService = {
   async isPremium(userId: string): Promise<boolean> {
     try {
       const profile = await this.getProfile(userId);
-      if (!profile || !profile.is_premium) return false;
-      if (profile.premium_expires_at) {
-        return new Date(profile.premium_expires_at) > new Date();
-      }
-      return true;
+      return !!profile?.is_premium;
     } catch {
       return false;
     }
   },
 
-  async activatePremium(
-    userId: string,
-    tier: "monthly" | "annual",
-  ): Promise<boolean> {
+  async activatePremium(userId: string): Promise<boolean> {
     try {
-      const now = new Date();
-      const expiresAt =
-        tier === "monthly"
-          ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-          : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-
       const current = await this.getProfile(userId);
       const next = current
         ? {
             ...current,
             is_premium: true,
-            premium_tier: tier,
-            premium_expires_at: expiresAt.toISOString(),
+            premium_tier: "lifetime" as const,
+            premium_expires_at: null,
           }
         : {
             ...createDefaultProfile(userId),
             is_premium: true,
-            premium_tier: tier,
-            premium_expires_at: expiresAt.toISOString(),
+            premium_tier: "lifetime" as const,
+            premium_expires_at: null,
           };
       await StorageService.set(profileKey(userId), next);
       return true;
