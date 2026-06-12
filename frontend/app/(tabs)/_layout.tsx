@@ -70,12 +70,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="rank"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }

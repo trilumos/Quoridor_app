@@ -175,7 +175,6 @@ function AppNavigator() {
         <Stack.Screen name="achievements" />
         <Stack.Screen name="match-history" />
         <Stack.Screen name="edit-profile" />
-        <Stack.Screen name="ad-interstitial" />
         <Stack.Screen name="game-over" />
         <Stack.Screen name="match-result" />
       </Stack>
