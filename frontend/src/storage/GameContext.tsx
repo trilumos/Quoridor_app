@@ -651,9 +651,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       isPassAndPlay: boolean = false,
       opponentWasOneStepFromGoal: boolean = false,
       didJump: boolean = false,
+      isWin: boolean = true,
     ) => {
       const hour = new Date().getHours();
-      const isWin = newStats.totalWins > (newStats.totalWins - 1);
 
       setAchievements((prev) => {
         const next = [...prev.map((a) => ({ ...a }))];
@@ -823,7 +823,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const hasPlayedInLast24Hours = useCallback(() => {
     if (!stats.lastGameTimestamp) return false;
     const diff = Date.now() - stats.lastGameTimestamp;
-    return diff < 2 * 60 * 60 * 1000;
+    return diff < 24 * 60 * 60 * 1000;
   }, [stats.lastGameTimestamp]);
 
   const recordWin = useCallback(
@@ -877,6 +877,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           isPassAndPlay,
           opponentWasOneStepFromGoal,
           didJump,
+          true,
         );
         return next;
       });
@@ -905,7 +906,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
             : prev.passAndPlayGames,
         };
         persist(StorageService.KEYS.STATS, next);
-        checkAchievements(next);
+        checkAchievements(
+          next,
+          wallsPlaced,
+          undefined,
+          undefined,
+          isPassAndPlay,
+          false,
+          false,
+          false,
+        );
         return next;
       });
     },

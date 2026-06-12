@@ -216,15 +216,14 @@ export default function TrainerScreen() {
     switch (type) {
       case "boardSetup": {
         const board = emptyBoard();
-        // Player 1 at position 5,4 (row 5, col 4, center-ish top)
-        board[0][4] = { type: "pawn1" };
-        // Player 2 at position 5,4 (row 8, col 4, center-ish bottom)
-        board[8][4] = { type: "pawn2" };
-        // Goals
+        // Goals across the top and bottom rows
         for (let c = 0; c < 9; c++) {
           board[0][c] = { type: "goal" };
           board[8][c] = { type: "goal" };
         }
+        // Pawns drawn on their starting cells (over the goal rows)
+        board[0][4] = { type: "pawn1" };
+        board[8][4] = { type: "pawn2" };
         return (
           <LessonBoard
             cells={board}
@@ -415,8 +414,8 @@ export default function TrainerScreen() {
 
       case "symmetryBreaking": {
         const board = emptyBoard();
-        board[4][4] = { type: "pawn1" };
-        board[4][4] = { type: "pawn2" };
+        board[5][4] = { type: "pawn1" };
+        board[3][4] = { type: "pawn2" };
         const walls = [
           { row: 3, col: 2, orientation: "h" as const },
           { row: 3, col: 5, orientation: "h" as const },

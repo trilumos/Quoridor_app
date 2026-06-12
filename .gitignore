@@ -30,3 +30,8 @@
 # Environment files
 *.env
 *.env.*
+
+# Local scratch / tooling (not part of the app)
+/SS/
+/testing/
+.claude/

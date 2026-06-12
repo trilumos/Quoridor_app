@@ -34,6 +34,7 @@ export function getAIMove(
     case 'easy':   return easyAIMove(gameState);
     case 'medium': return mediumAIMove(gameState);
     case 'hard':   return hardAIMove(gameState);
+    default:       return easyAIMove(gameState);
   }
 }
 

@@ -97,6 +97,9 @@ function AppContent() {
       // Called on startup if already purchased, or right after a new purchase
       setPremium(true);
       setAdsDisabled(true);
+      // Keep the auth store / profile premium flag in sync so screens that read
+      // premium from useAuthStore (game, profile) reflect the purchase too.
+      void useAuthStore.getState().setPremiumStatus(true);
     });
 
     return () => {
